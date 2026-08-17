@@ -1,0 +1,707 @@
+﻿"use client";
+import React, { useState } from "react";
+import { Modal } from "@/components/ui/modal";
+import type { Shipment } from "@/types/shipment";
+import ShipmentStatusBar, { type ShipmentFlowStage } from "./ShipmentStatusBar";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000";
+
+interface ShipmentDetailModalProps {
+  shipment: Shipment | null;
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+type ModalTab = "overview" | "journey" | "documents" | "history" | "folder";
+
+const TAB_LIST: { key: ModalTab; label: string; icon: React.ReactNode }[] = [
+  {
+    key: "overview",
+    label: "Tổng quan",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="7" height="7"/>
+        <rect x="14" y="3" width="7" height="7"/>
+        <rect x="14" y="14" width="7" height="7"/>
+        <rect x="3" y="14" width="7" height="7"/>
+      </svg>
+    ),
+  },
+  {
+    key: "journey",
+    label: "Hành trình",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="2" y1="12" x2="22" y2="12"/>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+      </svg>
+    ),
+  },
+  {
+    key: "documents",
+    label: "Chứng từ",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+      </svg>
+    ),
+  },
+  {
+    key: "history",
+    label: "Lịch sử",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="12 8 12 12 14 14"/>
+        <path d="M3.05 11a9 9 0 1 0 .5-4H1"/>
+        <polyline points="1 2 1 7 6 7"/>
+      </svg>
+    ),
+  },
+  {
+    key: "folder",
+    label: "Thư mục",
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+      </svg>
+    ),
+  },
+];
+
+const STATUS_MAP: Record<string, { label: string; color: string; bg: string; dot: string }> = {
+  shipping:     { label: "Đang vận chuyển", color: "text-blue-light-600",   bg: "bg-blue-light-50 dark:bg-blue-light-500/10", dot: "bg-blue-light-500" },
+  completed:    { label: "Hoàn thành",       color: "text-success-600",      bg: "bg-success-50 dark:bg-success-500/10", dot: "bg-success-500" },
+  missing_docs: { label: "Thiếu giấy tờ",   color: "text-error-600",        bg: "bg-error-50 dark:bg-error-500/10", dot: "bg-error-500" },
+};
+
+
+const DOC_STATUS_MAP: Record<string, { label: string; color: string; dot: string }> = {
+  ok:      { label: "Đã có",      color: "text-success-600", dot: "bg-success-500" },
+  missing: { label: "Còn thiếu",  color: "text-error-600",   dot: "bg-error-500" },
+  pending: { label: "Đang chờ",   color: "text-warning-600", dot: "bg-warning-500" },
+  expired: { label: "Hết hạn",    color: "text-gray-500",    dot: "bg-gray-400" },
+};
+
+const FLOW_STAGES: ShipmentFlowStage[] = [
+  { key: "buying", label: "Lên đơn hàng", shortLabel: "PI" },
+  { key: "shipping", label: "Xin giấy phép / Vận chuyển biển", shortLabel: "INV..." },
+  { key: "arrived", label: "Đã đến cảng", shortLabel: "Cảng" },
+  { key: "declared", label: "Nộp tờ khai", shortLabel: "Tờ khai" },
+  { key: "fifteenb", label: "Mẫu 15B", shortLabel: "15B" },
+  { key: "customs", label: "Thông quan", shortLabel: "MV/QDTQ" },
+  { key: "delivered", label: "Giao hàng thành công", shortLabel: "Trả công" },
+];
+
+function InfoRow({ label, value, mono = false }: { label: string; value?: string; mono?: boolean }) {
+  if (!value) return null;
+  return (
+    <div className="flex flex-col gap-0.5 sm:flex-row sm:items-start">
+      <span className="w-full sm:w-40 text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">{label}</span>
+      <span className={`text-sm font-medium text-gray-800 dark:text-white/90 ${mono ? "font-mono" : ""}`}>{value}</span>
+    </div>
+  );
+}
+
+function formatDate(iso?: string): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("vi-VN");
+}
+
+function formatDateTime(iso?: string): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function formatAtaDelta(eta?: string, ata?: string): string | null {
+  if (!eta || !ata) return null;
+  const etaDate = new Date(`${eta}T00:00:00`);
+  const ataDate = new Date(`${ata}T00:00:00`);
+  const diffDays = Math.round((ataDate.getTime() - etaDate.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return "Giao đúng hạn";
+  if (diffDays < 0) return `Giao sớm ${Math.abs(diffDays)} ngày`;
+  return `Giao muộn ${diffDays} ngày`;
+}
+
+function normalizeDocKey(name: string): string {
+  return name.toUpperCase().replace(/[^A-Z0-9_]/g, "");
+}
+
+function buildFallbackName(email: string): string {
+  const localPart = email.split("@")[0] || "";
+  const parts = localPart.replace(/[._-]+/g, " ").trim();
+  return parts || "Người nhận";
+}
+
+function toReadableName(email?: string, ownerName?: string): string {
+  if (ownerName && ownerName.trim()) return ownerName.trim();
+  if (email) return buildFallbackName(email);
+  return "";
+}
+
+async function fetchPIRecipient(orderCode: string): Promise<{ email: string; name: string } | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/getPIFiles`, {
+      cache: "no-store",
+    });
+
+    if (!res.ok) return null;
+
+    const json = await res.json();
+    const files = Array.isArray(json?.files) ? json.files : [];
+    const matchedFile = files.find((file: { fileName?: string; ownerEmail?: string; ownerName?: string }) => {
+      const fileName = String(file?.fileName || "").toUpperCase();
+      return fileName.includes(orderCode.toUpperCase()) && (file?.ownerEmail || file?.ownerName);
+    });
+
+    const firstFile = matchedFile || files.find((file: { ownerEmail?: string; ownerName?: string }) => file?.ownerEmail || file?.ownerName);
+    if (!firstFile) return null;
+
+    const email = String(firstFile.ownerEmail || "").trim();
+    const name = toReadableName(email, String(firstFile.ownerName || "").trim());
+    if (!email) return null;
+
+    return { email, name };
+  } catch (error) {
+    console.warn("Không lấy được PI recipient", error);
+    return null;
+  }
+}
+
+function pickRecipient(shipment: Shipment) {
+  const docs = shipment.documents || [];
+  const missingDocs = docs.filter((doc) => doc.status === "missing" || doc.status === "pending");
+  const okDocs = docs.filter((doc) => doc.status === "ok");
+
+  const relatedCandidates = [
+    ["INV", "BL", "CO", "HC", "PKL"],
+    ["BL", "CO", "HC", "PKL", "INV"],
+    ["QDTQ", "MV", "15B"],
+    ["DON_KD", "AN"],
+    ["BB_LM", "PHI_TK", "THUE_NK"],
+    ["TRA_CONG", "QDTQ", "MV"],
+  ];
+
+  const pickFromDocs = (docList: typeof docs, keys: string[]) => {
+    for (const key of keys) {
+      const match = docList.find((doc) => normalizeDocKey(doc.name).includes(key));
+      if (match?.uploaderEmail) {
+        return {
+          email: match.uploaderEmail,
+          name: match.uploaderName || buildFallbackName(match.uploaderEmail),
+        };
+      }
+    }
+    return null;
+  };
+
+  for (const missing of missingDocs) {
+    const missingKey = normalizeDocKey(missing.name);
+    const candidateKeys = relatedCandidates.find((group) => group.some((k) => missingKey.includes(k))) || ["INV", "BL", "CO", "HC", "PKL", "QDTQ", "MV", "15B", "DON_KD", "AN", "BB_LM", "PHI_TK", "THUE_NK"];
+    const recipient = pickFromDocs(okDocs, candidateKeys);
+    if (recipient?.email) return recipient;
+  }
+
+  const anyRecipient = docs.find((doc) => doc.uploaderEmail);
+  if (anyRecipient?.uploaderEmail) {
+    return {
+      email: anyRecipient.uploaderEmail,
+      name: anyRecipient.uploaderName || buildFallbackName(anyRecipient.uploaderEmail),
+    };
+  }
+
+  return { email: "", name: "" };
+}
+
+export default function ShipmentDetailModal({ shipment, isOpen, onClose }: ShipmentDetailModalProps) {
+  const [activeTab, setActiveTab] = useState<ModalTab>("overview");
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+
+  if (!shipment) return null;
+
+  const statusInfo = STATUS_MAP[shipment.status];
+  const flowLabel = shipment.flowStageLabel || statusInfo?.label;
+  const flowColor = shipment.flowStageKey === "delivered"
+    ? "text-success-600 bg-success-50 dark:bg-success-500/10"
+    : shipment.flowStageKey === "buying"
+    ? "text-amber-700 bg-amber-50 dark:bg-amber-500/10"
+    : shipment.flowStageLate
+    ? "text-error-600 bg-error-50 dark:bg-error-500/10"
+    : "text-blue-light-600 bg-blue-light-50 dark:bg-blue-light-500/10";
+  const missingDocsCount = shipment.totalDocs - shipment.receivedDocs;
+  const documentsSorted = [...(shipment.documents || [])].sort((a, b) => {
+    if (a.status !== b.status) return a.status === "ok" ? -1 : 1;
+    return a.name.localeCompare(b.name, "vi");
+  });
+  const missingDocs = documentsSorted.filter(d => d.status === "missing" || d.status === "pending");
+
+  const handleSendEmail = async () => {
+    const missingDocNames = missingDocs.map((doc) => doc.name).join(", ");
+
+    if (!missingDocNames) return;
+
+    setIsSendingEmail(true);
+    try {
+      const piRecipient = await fetchPIRecipient(shipment.orderCode);
+      const recipient = piRecipient || pickRecipient(shipment);
+
+      if (!recipient.email) {
+        throw new Error("Không tìm được email người nhận");
+      }
+
+      const res = await fetch(`${API_BASE}/api/sendMissingDocumentEmail`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          to_email: recipient.email,
+          to_name: recipient.name,
+          order_code: shipment.orderCode,
+          missing_docs: missingDocNames,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`sendMissingDocumentEmail lỗi: ${res.status}`);
+      }
+
+      setEmailSent(true);
+      window.setTimeout(() => setEmailSent(false), 5000);
+    } catch (error) {
+      console.error("Không gửi được email cảnh báo:", error);
+      alert("Không gửi được email cảnh báo. Vui lòng thử lại.");
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} className="max-w-3xl mx-4 my-4 max-h-[92vh] overflow-hidden flex flex-col">
+      {/* Header */}
+      <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white font-mono tracking-wide">
+              {shipment.orderCode}
+            </h2>
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${flowColor}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${statusInfo?.dot || "bg-current"}`} />
+              {flowLabel}
+            </span>
+          </div>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{shipment.shipName}</p>
+          <p className="text-xs text-gray-400">Nhà cung cấp: <span className="font-medium text-gray-600 dark:text-gray-300">{shipment.supplier}</span></p>
+        </div>
+
+        {/* Missing docs badge */}
+        {missingDocsCount > 0 && (
+          <div className="flex-shrink-0 flex items-center gap-1.5 rounded-xl bg-error-50 border border-error-100 px-3 py-1.5 dark:bg-error-500/10 dark:border-error-500/20">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-error-500">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <span className="text-xs font-semibold text-error-600 dark:text-error-400">
+              {missingDocsCount} giấy tờ thiếu
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex items-center gap-1 px-6 py-2 border-b border-gray-100 dark:border-gray-800 overflow-x-auto no-scrollbar flex-shrink-0">
+        {TAB_LIST.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
+              activeTab === tab.key
+                ? "bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400"
+                : "text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-200"
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      <div className="overflow-y-auto flex-1 px-6 py-5 custom-scrollbar">
+
+        {/* ── OVERVIEW ── */}
+        {activeTab === "overview" && (
+          <div className="flex max-h-[calc(92vh-180px)] flex-col gap-6 overflow-y-auto pr-1 custom-scrollbar">
+            {/* Key info grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-white/[0.02]">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Thông tin vận chuyển</p>
+                <div className="flex flex-col gap-2">
+                  <InfoRow label="Hãng tàu" value={shipment.vessel} />
+                  <InfoRow label="Bill of Lading" value={shipment.bill} mono />
+                  <InfoRow label="Cảng đến" value={shipment.port} />
+                  <InfoRow label="Số cont" value={shipment.contCount?.toString()} />
+                </div>
+              </div>
+              <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-white/[0.02]">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Thời gian</p>
+                <div className="flex flex-col gap-2">
+                  <InfoRow label="ETD (Dự kiến xuất)" value={formatDate(shipment.etd)} />
+                  <InfoRow label="ETA (Dự kiến đến)" value={formatDate(shipment.eta)} />
+                  <InfoRow label="ATA (Thực tế đến)" value={shipment.ata ? formatDate(shipment.ata) : "Chưa đến"} />
+                  {shipment.ata && shipment.eta && (
+                    <InfoRow label="So với ETA" value={formatAtaDelta(shipment.eta, shipment.ata) || undefined} />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-white/[0.02]">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Trạng thái đơn hàng</p>
+              <ShipmentStatusBar
+                activeStage={shipment.flowStageKey || "buying"}
+                stages={FLOW_STAGES}
+                isLate={shipment.flowStageLate}
+              />
+              <div className="mt-4 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-gray-800 dark:bg-gray-900 dark:text-white">
+                {flowLabel}
+              </div>
+            </div>
+
+            {/* Supplier / Factory info */}
+            <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-white/[0.02]">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-brand-500 text-white font-semibold text-sm">
+                {(shipment.supplier || "?").split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase()}
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-gray-800 dark:text-white">{shipment.supplier || "Chưa có"}</p>
+                {shipment.factory && <p className="text-xs text-gray-400">{shipment.factory}{shipment.origin ? ` • ${shipment.origin}` : ""}</p>}
+              </div>
+            </div>
+
+            {/* Docs summary */}
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Giấy tờ / Chứng từ</p>
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-2.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-success-400 to-success-500 transition-all duration-700"
+                    style={{ width: shipment.totalDocs > 0 ? `${(shipment.receivedDocs / shipment.totalDocs) * 100}%` : "0%" }}
+                  />
+                </div>
+                <span className="text-sm font-bold text-gray-800 dark:text-white whitespace-nowrap">
+                  {shipment.receivedDocs} / {shipment.totalDocs}
+                </span>
+              </div>
+              {missingDocsCount > 0 && (
+                <div className="mt-2">
+                  <p className="text-xs text-error-600 dark:text-error-400">
+                    ⚠️ Còn thiếu {missingDocsCount} giấy tờ
+                  </p>
+                  {shipment.missingDocs && (
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 break-words">
+                      {shipment.missingDocs}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── JOURNEY ── */}
+        {activeTab === "journey" && (
+          <div className="flex flex-col gap-6">
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-5 dark:border-gray-800 dark:bg-white/[0.02]">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-5">
+                Hành trình vận chuyển
+              </p>
+              <p className="text-sm text-gray-400">
+                Thanh trạng thái tổng quan đang hiển thị ở tab Tổng quan theo chứng từ hiện có.
+              </p>
+            </div>
+
+            {/* Journey detail cards */}
+            {shipment.timeline && (
+              <div className="flex flex-col gap-3">
+                {shipment.timeline.map((stage, idx) => (
+                  <div
+                    key={stage.id}
+                    className={`flex gap-4 rounded-xl border p-4 transition-all ${
+                      stage.isCompleted
+                        ? "border-success-100 bg-success-50/50 dark:border-success-500/20 dark:bg-success-500/5"
+                        : stage.isCurrent
+                        ? "border-brand-200 bg-brand-50 dark:border-brand-500/30 dark:bg-brand-500/10"
+                        : "border-gray-100 bg-gray-50/50 dark:border-gray-800 dark:bg-white/[0.01]"
+                    }`}
+                  >
+                    <div className={`flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold ${
+                      stage.isCompleted ? "bg-success-500 text-white" : stage.isCurrent ? "bg-brand-500 text-white" : "bg-gray-200 text-gray-500 dark:bg-gray-700"
+                    }`}>
+                      {stage.isCompleted ? "✓" : idx + 1}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className={`text-sm font-semibold ${
+                          stage.isCompleted ? "text-success-700 dark:text-success-400" : stage.isCurrent ? "text-brand-700 dark:text-brand-300" : "text-gray-500"
+                        }`}>{stage.label}</p>
+                        {stage.isCurrent && (
+                          <span className="text-xs font-medium text-brand-500 bg-brand-50 dark:bg-brand-500/10 px-2 py-0.5 rounded-full">Đang ở đây</span>
+                        )}
+                      </div>
+                      {stage.portName && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">📍 {stage.portName}</p>}
+                      {stage.timestamp && <p className="text-xs text-gray-400 mt-0.5">🕐 {formatDateTime(stage.timestamp)}</p>}
+                      {stage.note && (
+                        <p className="mt-1.5 text-xs text-warning-700 dark:text-warning-300 bg-warning-50 dark:bg-warning-500/10 rounded-lg px-2 py-1">
+                          ⚠️ {stage.note}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── DOCUMENTS ── */}
+        {activeTab === "documents" && (
+          <div className="flex flex-col gap-4">
+            {/* Missing docs alert */}
+            {missingDocs.length > 0 && (
+              <div className="rounded-xl border border-error-200 bg-error-50 p-4 dark:border-error-500/20 dark:bg-error-500/10">
+                <div className="flex items-start gap-3">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-error-500 mt-0.5 flex-shrink-0">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/>
+                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                  </svg>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-error-700 dark:text-error-400">
+                      Thiếu {missingDocs.length} chứng từ hải quan
+                    </p>
+                    <p className="text-xs text-error-600 dark:text-error-300 mt-1">
+                      Các giấy tờ sau cần được bổ sung để tránh ảnh hưởng tiến độ thông quan:
+                    </p>
+                    <ul className="mt-2 flex flex-col gap-1">
+                      {missingDocs.map(d => (
+                        <li key={d.id} className="flex items-center gap-2 text-xs text-error-600 dark:text-error-300">
+                          <span className="w-1 h-1 rounded-full bg-error-500 flex-shrink-0" />
+                          {d.name}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Email alert button */}
+            {missingDocs.length > 0 && (
+              <button
+                onClick={handleSendEmail}
+                disabled={isSendingEmail || emailSent}
+                className={`w-full flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold transition-all duration-200 ${
+                  emailSent
+                    ? "border-success-200 bg-success-50 text-success-600 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-400"
+                    : "border-brand-200 bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-60 disabled:cursor-not-allowed"
+                }`}
+              >
+                {emailSent ? (
+                  <>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    Đã gửi email thành công!
+                  </>
+                ) : isSendingEmail ? (
+                  <>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+                      <polyline points="23 4 23 10 17 10"/>
+                      <polyline points="1 20 1 14 7 14"/>
+                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                    </svg>
+                    Đang gửi email...
+                  </>
+                ) : (
+                  <>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                      <polyline points="22,6 12,13 2,6"/>
+                    </svg>
+                    Gửi email cảnh báo (thiếu {missingDocsCount} giấy tờ)
+                  </>
+                )}
+              </button>
+            )}
+
+            {/* Document list */}
+            <div className="max-h-[320px] overflow-y-auto pr-1 custom-scrollbar flex flex-col gap-2">
+              {documentsSorted.map(doc => {
+                const docStatus = DOC_STATUS_MAP[doc.status];
+                return (
+                  <div
+                    key={doc.id}
+                    className={`flex items-center gap-3 rounded-xl border p-3.5 transition-colors ${
+                      doc.status === "missing"
+                        ? "border-error-100 bg-error-50/50 dark:border-error-500/20 dark:bg-error-500/5"
+                        : doc.status === "pending"
+                        ? "border-warning-100 bg-warning-50/50 dark:border-warning-500/20 dark:bg-warning-500/5"
+                        : "border-gray-100 bg-gray-50/50 dark:border-gray-800 dark:bg-white/[0.02]"
+                    }`}
+                  >
+                    {/* Icon */}
+                    <div className={`flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-lg ${
+                      doc.status === "ok" ? "bg-success-100 dark:bg-success-500/10" :
+                      doc.status === "missing" ? "bg-error-100 dark:bg-error-500/10" :
+                      "bg-warning-100 dark:bg-warning-500/10"
+                    }`}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={
+                        doc.status === "ok" ? "text-success-600" :
+                        doc.status === "missing" ? "text-error-600" : "text-warning-600"
+                      }>
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                      </svg>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800 dark:text-white/90 truncate">{doc.name}</p>
+                      <p className="text-xs text-gray-400">{doc.type.toUpperCase()}</p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className={`flex items-center gap-1 text-xs font-semibold ${docStatus?.color}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${docStatus?.dot}`} />
+                        {docStatus?.label}
+                      </span>
+                      {doc.fileId && (
+                        <a
+                          href={doc.url || "#"}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center w-7 h-7 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                            <polyline points="15 3 21 3 21 9"/>
+                            <line x1="10" y1="14" x2="21" y2="3"/>
+                          </svg>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {(!shipment.documents || shipment.documents.length === 0) && (
+                <p className="py-8 text-center text-sm text-gray-400">Chưa có chứng từ nào</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── HISTORY ── */}
+        {activeTab === "history" && (
+          <div className="flex flex-col gap-1">
+            {(shipment.statusHistory || []).length === 0 ? (
+              <p className="py-8 text-center text-sm text-gray-400">Chưa có lịch sử cập nhật</p>
+            ) : (
+              <div className="relative">
+                {/* Vertical line */}
+                <div className="absolute left-4 top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700" />
+                <div className="flex flex-col gap-0">
+                  {[...(shipment.statusHistory || [])].reverse().map((h, idx) => (
+                    <div key={h.id} className="relative flex gap-4 pb-5 pl-10">
+                      {/* Dot */}
+                      <div className="absolute left-2.5 top-1 flex h-3 w-3 items-center justify-center rounded-full border-2 border-white bg-brand-500 dark:border-gray-900 shadow-sm" />
+                      <div className="flex-1 rounded-xl border border-gray-100 bg-gray-50 p-3 dark:border-gray-800 dark:bg-white/[0.02]">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-semibold text-gray-800 dark:text-white/90">{h.action}</p>
+                          <span className="text-xs text-gray-400 whitespace-nowrap">{formatDateTime(h.timestamp)}</span>
+                        </div>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{h.description}</p>
+                        {h.user && (
+                          <p className="mt-1 text-xs text-gray-400">
+                            👤 {h.user}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── FOLDER ── */}
+        {activeTab === "folder" && (
+          <div className="flex flex-col gap-4">
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-5 dark:border-gray-800 dark:bg-white/[0.02]">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-warning-100 dark:bg-warning-500/10">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-warning-600">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-gray-800 dark:text-white">Thư mục Google Drive</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Chứa toàn bộ chứng từ hải quan của {shipment.orderCode}</p>
+                </div>
+              </div>
+
+              {shipment.driveUrl ? (
+                <a
+                  href={shipment.driveUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full rounded-xl border border-brand-200 bg-brand-500 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-600 transition-colors"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                  </svg>
+                  Mở thư mục Drive
+                </a>
+              ) : (
+                <div className="rounded-xl border border-dashed border-gray-200 dark:border-gray-700 p-6 text-center">
+                  <p className="text-sm text-gray-400">Chưa có thư mục Drive được liên kết</p>
+                </div>
+              )}
+
+              {shipment.timeUpdate && (
+                <p className="mt-3 text-xs text-gray-400 text-center">
+                  Cập nhật lần cuối: {new Date(shipment.timeUpdate).toLocaleString("vi-VN")}
+                </p>
+              )}
+            </div>
+
+            {/* Quick email from folder tab */}
+            {missingDocsCount > 0 && (
+              <button
+                onClick={handleSendEmail}
+                disabled={isSendingEmail || emailSent}
+                className={`w-full flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-all ${
+                  emailSent
+                    ? "border-success-200 bg-success-50 text-success-600 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-400"
+                    : "border-error-200 bg-error-50 text-error-600 hover:bg-error-100 dark:border-error-500/30 dark:bg-error-500/10 dark:text-error-400 disabled:opacity-60"
+                }`}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                  <polyline points="22,6 12,13 2,6"/>
+                </svg>
+                {emailSent ? "Đã gửi!" : `Gửi email cảnh báo thiếu ${missingDocsCount} giấy tờ`}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
