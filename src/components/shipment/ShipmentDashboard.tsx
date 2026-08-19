@@ -42,19 +42,13 @@ export default function ShipmentDashboard() {
     setIsLoading(false);
   }, []);
 
-  const initializeData = useCallback(async () => {
-    setApiError(null);
-    await triggerUpdateAll();
-    await loadData();
-  }, [loadData]);
-
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void initializeData();
+      void loadData();
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [initializeData]);
+  }, [loadData]);
 
   // Refresh handler
   const handleRefresh = useCallback(async () => {
