@@ -94,6 +94,15 @@ const FLOW_STAGES: ShipmentFlowStage[] = [
   { key: "delivered", label: "Giao hàng thành công", shortLabel: "Trả công" },
 ];
 
+const STAGE_DOC_GROUPS: Record<Exclude<ShipmentFlowStage["key"], "delivered">, string[]> = {
+  buying: ["PI"],
+  shipping: ["INV", "BL", "PKL", "CO", "HC"],
+  arrived: ["DON_KD", "AN"],
+  declared: ["BB_LM", "PHI_TK", "THUE_NK"],
+  fifteenb: ["15B"],
+  customs: ["QDTQ", "MV"],
+};
+
 function InfoRow({ label, value, mono = false }: { label: string; value?: string; mono?: boolean }) {
   if (!value) return null;
   return (
@@ -126,6 +135,34 @@ function formatAtaDelta(eta?: string, ata?: string): string | null {
 
 function normalizeDocKey(name: string): string {
   return name.toUpperCase().replace(/[^A-Z0-9_]/g, "");
+}
+
+function getStageOrder(stage: ShipmentFlowStage["key"]): number {
+  return FLOW_STAGES.findIndex((s) => s.key === stage);
+}
+
+function hasOutOfOrderDocuments(shipment: Shipment): boolean {
+  const documents = shipment.documents || [];
+  const activeStage = shipment.flowStageKey || "buying";
+  if (activeStage === "delivered") return false;
+
+  const currentIndex = getStageOrder(activeStage);
+  if (currentIndex < 0) return false;
+
+  const currentStageKeys = STAGE_DOC_GROUPS[activeStage];
+  const laterStageKeys = FLOW_STAGES.slice(currentIndex + 1)
+    .map((stage) => (stage.key === "delivered" ? ["TRA_CONG"] : STAGE_DOC_GROUPS[stage.key as Exclude<ShipmentFlowStage["key"], "delivered">]))
+    .flat();
+
+  const hasMissingCurrentStageDocs = currentStageKeys.some((key) =>
+    documents.some((doc) => normalizeDocKey(doc.name).includes(key) && doc.status !== "ok")
+  );
+
+  const hasLaterStageDocs = laterStageKeys.some((key) =>
+    documents.some((doc) => normalizeDocKey(doc.name).includes(key) && doc.status === "ok")
+  );
+
+  return hasMissingCurrentStageDocs && hasLaterStageDocs;
 }
 
 function buildFallbackName(email: string): string {
@@ -223,11 +260,14 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
 
   const statusInfo = STATUS_MAP[shipment.status];
   const flowLabel = shipment.flowStageLabel || statusInfo?.label;
+  const hasStageWarning = hasOutOfOrderDocuments(shipment);
   const flowColor = shipment.flowStageKey === "delivered"
     ? "text-success-600 bg-success-50 dark:bg-success-500/10"
     : shipment.flowStageKey === "buying"
-    ? "text-amber-700 bg-amber-50 dark:bg-amber-500/10"
-    : shipment.flowStageLate
+    ? hasStageWarning
+      ? "text-error-600 bg-error-50 dark:bg-error-500/10"
+      : "text-amber-700 bg-amber-50 dark:bg-amber-500/10"
+    : hasStageWarning || shipment.flowStageLate
     ? "text-error-600 bg-error-50 dark:bg-error-500/10"
     : "text-blue-light-600 bg-blue-light-50 dark:bg-blue-light-500/10";
   const missingDocsCount = shipment.totalDocs - shipment.receivedDocs;
@@ -365,6 +405,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
                 activeStage={shipment.flowStageKey || "buying"}
                 stages={FLOW_STAGES}
                 isLate={shipment.flowStageLate}
+                hasOutOfOrderDocs={hasStageWarning}
               />
               <div className="mt-4 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-gray-800 dark:bg-gray-900 dark:text-white">
                 {flowLabel}
@@ -392,7 +433,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
                     style={{ width: shipment.totalDocs > 0 ? `${(shipment.receivedDocs / shipment.totalDocs) * 100}%` : "0%" }}
                   />
                 </div>
-                <span className="text-sm font-bold text-gray-800 dark:text-white whitespace-nowrap">
+                <span className="text-sm font-bold text-gray-800 mb-4 dark:text-white whitespace-nowrap">
                   {shipment.receivedDocs} / {shipment.totalDocs}
                 </span>
               </div>
@@ -613,7 +654,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
                 {/* Vertical line */}
                 <div className="absolute left-4 top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700" />
                 <div className="flex flex-col gap-0">
-                  {[...(shipment.statusHistory || [])].reverse().map((h, idx) => (
+                  {[...(shipment.statusHistory || [])].reverse().map((h) => (
                     <div key={h.id} className="relative flex gap-4 pb-5 pl-10">
                       {/* Dot */}
                       <div className="absolute left-2.5 top-1 flex h-3 w-3 items-center justify-center rounded-full border-2 border-white bg-brand-500 dark:border-gray-900 shadow-sm" />
@@ -704,4 +745,3 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
     </Modal>
   );
 }
-

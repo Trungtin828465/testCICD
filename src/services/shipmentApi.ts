@@ -105,7 +105,7 @@ function buildDocuments(
     return {
       id: key,
       name: `Chứng từ ${key}`,
-      type: "sheet",
+      type: "file",
       status: missing ? "missing" : "ok",
       note: missing ? "Thiếu theo getSheetTotal" : undefined,
       uploaderEmail: contact.email,
@@ -128,8 +128,8 @@ function deriveFlowStage(
   if (has("15B")) return { key: "fifteenb", label: "Mẫu 15B", isLate: etaLate };
   if (has("BB_LM") || has("PHI_TK") || has("THUE_NK")) return { key: "declared", label: "Nộp tờ khai", isLate: etaLate };
   if (has("DON_KD") || has("AN")) return { key: "arrived", label: "Đã đến cảng", isLate: etaLate };
-  if (has("INV") || has("PKL") || has("BL") || has("CO") || has("HC")) {
-    return { key: "shipping", label: "Xin giấy phép / Đang vận chuyển biển", isLate: etaLate };
+  if (has("INV") || has("PKL") || has("BL") || has("CO") || has("HC")|| has("BL")) {
+    return { key: "shipping", label: "Đang vận chuyển biển", isLate: etaLate };
   }
   return { key: "buying", label: "Lên đơn hàng", isLate: etaLate };
 }

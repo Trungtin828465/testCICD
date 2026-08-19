@@ -20,6 +20,7 @@ interface ShipmentStatusBarProps {
   activeStage: ShipmentFlowStageKey;
   stages: ShipmentFlowStage[];
   isLate?: boolean;
+  hasOutOfOrderDocs?: boolean;
 }
 
 const STAGE_ICON: Record<ShipmentFlowStageKey, React.ReactNode> = {
@@ -32,14 +33,15 @@ const STAGE_ICON: Record<ShipmentFlowStageKey, React.ReactNode> = {
   delivered: <span className="text-[10px] font-bold">OK</span>,
 };
 
-export default function ShipmentStatusBar({ activeStage, stages, isLate }: ShipmentStatusBarProps) {
+export default function ShipmentStatusBar({ activeStage, stages, isLate, hasOutOfOrderDocs }: ShipmentStatusBarProps) {
   const activeIndex = Math.max(0, stages.findIndex((s) => s.key === activeStage));
 
   const getTone = (index: number) => {
     if (activeStage === "delivered") return "success";
+    if (hasOutOfOrderDocs && index <= activeIndex) return "danger";
     if (index === 0) return "warning";
     if (isLate && index <= 5) return "danger";
-    if (index <= activeIndex) return "primary";
+    if (index <= activeIndex) return activeStage === "buying" ? "warning" : "primary";
     return "muted";
   };
 

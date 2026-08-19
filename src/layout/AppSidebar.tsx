@@ -30,7 +30,7 @@ const navItems: NavItem[] = [
   {
     icon: <GridIcon />,
     name: "Dashboard",
-    subItems: [{ name: "Ecommerce", path: "/", pro: false }],
+    subItems: [{ name: "Xuất nhập khẩu", path: "/", pro: false }],
   },
   {
     icon: <CalenderIcon />,
@@ -89,7 +89,7 @@ const othersItems: NavItem[] = [
     name: "Authentication",
     subItems: [
       { name: "Sign In", path: "/signin", pro: false },
-      { name: "Sign Up", path: "/signup", pro: false },
+      // { name: "Sign Up", path: "/signup", pro: false },
     ],
   },
 ];
