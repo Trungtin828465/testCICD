@@ -1,7 +1,7 @@
 "use client";
 
 import { Modal } from "@/components/ui/modal";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 
@@ -21,6 +21,10 @@ type NotificationRow = {
 type NotificationApiResponse = {
   success?: boolean;
   message?: string;
+  total?: number;
+  latest_count?: number;
+  latest_notifications?: NotificationRow[];
+  all_notifications?: NotificationRow[];
   data?: {
     data?: NotificationRow[];
   };
@@ -38,8 +42,8 @@ type NotificationItem = {
   time: string;
 };
 
-function parseNotificationRows(json: NotificationApiResponse): NotificationRow[] {
-  return Array.isArray(json.data?.data) ? json.data.data : [];
+function getNotificationKey(item: NotificationItem, index: number) {
+  return `${item.id}-${item.orderCode}-${item.time}-${index}`;
 }
 
 function isDeliveredType(type?: string) {
@@ -52,7 +56,14 @@ function isMissingDocsType(type?: string) {
   return normalized === "THIEU_CHUNG_TU" || normalized === "MISSING_DOCS" || normalized === "MISSING";
 }
 
-function buildNotificationItems(rows: NotificationRow[]): NotificationItem[] {
+function parseRows(json: NotificationApiResponse): NotificationRow[] {
+  if (Array.isArray(json.latest_notifications)) return json.latest_notifications;
+  if (Array.isArray(json.all_notifications)) return json.all_notifications;
+  if (Array.isArray(json.data?.data)) return json.data.data;
+  return [];
+}
+
+function mapRows(rows: NotificationRow[]): NotificationItem[] {
   return rows
     .map((row) => {
       const type = String(row.type || "").trim();
@@ -61,7 +72,6 @@ function buildNotificationItems(rows: NotificationRow[]): NotificationItem[] {
       const message = String(row.message || "").trim();
       const createdAt = String(row.created_at || new Date().toISOString());
       const updatedBy = String(row.updated_by || "").trim();
-
       const delivered = isDeliveredType(type);
       const missing = isMissingDocsType(type) || (!delivered && Boolean(missingDocs || message));
 
@@ -101,45 +111,78 @@ export default function NotificationDropdown() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [badgeCount, setBadgeCount] = useState(0);
+  const [hasRealtimePulse, setHasRealtimePulse] = useState(false);
+  const refreshInFlight = useRef(false);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+
+  const refreshNotifications = async () => {
+    if (refreshInFlight.current) return;
+    refreshInFlight.current = true;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/sendNotification`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`sendNotification lỗi: ${res.status}`);
+
+      const json = (await res.json()) as NotificationApiResponse;
+      const rows = parseRows(json);
+      const mapped = mapRows(rows);
+      setNotifications(mapped);
+      setBadgeCount(typeof json.latest_count === "number" ? json.latest_count : mapped.length);
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Không tải được notification");
+    } finally {
+      setLoading(false);
+      refreshInFlight.current = false;
+    }
+  };
 
   useEffect(() => {
-    let ignore = false;
+    void refreshNotifications();
+    return () => {
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      eventSourceRef.current?.close();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [API_BASE]);
 
-    fetch(`${API_BASE}/api/sendNotification`, { cache: "no-store" })
-      .then(async (res) => {
-        if (!res.ok) {
-          throw new Error(`sendNotification lỗi: ${res.status}`);
-        }
-        return res.json() as Promise<NotificationApiResponse>;
-      })
-      .then((json) => {
-        if (ignore) return;
-        setNotifications(buildNotificationItems(parseNotificationRows(json)));
-      })
-      .catch((err) => {
-        if (!ignore) {
-          setError(err instanceof Error ? err.message : "Không tải được notification");
-        }
-      })
-      .finally(() => {
-        if (!ignore) setLoading(false);
+  useEffect(() => {
+    let closed = false;
+
+    const connect = () => {
+      if (closed) return;
+
+      eventSourceRef.current?.close();
+      const es = new EventSource(`${API_BASE}/notifications/stream`);
+      eventSourceRef.current = es;
+
+      es.addEventListener("notification_changed", () => {
+        setHasRealtimePulse(true);
+        void refreshNotifications();
       });
 
-    return () => {
-      ignore = true;
+      es.onerror = () => {
+        if (closed) return;
+        es.close();
+        if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+        reconnectTimer.current = setTimeout(connect, 3000);
+      };
     };
+
+    connect();
+
+    return () => {
+      closed = true;
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      eventSourceRef.current?.close();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [API_BASE]);
 
   const latestThree = useMemo(() => notifications.slice(0, 3), [notifications]);
-  const hasUnread = notifications.length > 0;
-
-  function toggleDropdown() {
-    setIsOpen((prev) => !prev);
-  }
-
-  function closeDropdown() {
-    setIsOpen(false);
-  }
+  const hasUnread = badgeCount > 0 || notifications.length > 0;
 
   const badgeTone = (kind: NotificationKind) => (kind === "delivered" ? "bg-success-500" : "bg-error-500");
 
@@ -147,10 +190,13 @@ export default function NotificationDropdown() {
     <div className="relative">
       <button
         className="relative flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
-        onClick={toggleDropdown}
+        onClick={() => {
+          setIsOpen((prev) => !prev);
+          setHasRealtimePulse(false);
+        }}
         title="Thông báo"
       >
-        {hasUnread ? (
+        {hasUnread && hasRealtimePulse ? (
           <span className="absolute right-0 top-0.5 z-10 h-2 w-2 rounded-full bg-orange-400">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-orange-400 opacity-75" />
           </span>
@@ -167,16 +213,16 @@ export default function NotificationDropdown() {
 
       <Dropdown
         isOpen={isOpen}
-        onClose={closeDropdown}
+        onClose={() => setIsOpen(false)}
         className="absolute -right-[240px] mt-[17px] flex w-[350px] flex-col rounded-2xl border border-gray-200 bg-white p-3 shadow-theme-lg dark:border-gray-800 dark:bg-gray-dark sm:w-[361px] lg:right-0"
       >
         <div className="mb-3 flex items-center justify-between border-b border-gray-100 pb-3 dark:border-gray-700">
           <div>
             <h5 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Thông báo</h5>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{notifications.length} thông báo từ hệ thống</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{badgeCount} thông báo từ hệ thống</p>
           </div>
           <button
-            onClick={closeDropdown}
+            onClick={() => setIsOpen(false)}
             className="text-gray-500 transition hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
           >
             <svg className="fill-current" width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -205,10 +251,10 @@ export default function NotificationDropdown() {
             </div>
           ) : (
             <ul className="flex flex-col gap-2">
-              {latestThree.map((item) => (
-                <li key={item.id}>
+              {latestThree.map((item, index) => (
+                <li key={getNotificationKey(item, index)}>
                   <DropdownItem
-                    onItemClick={closeDropdown}
+                    onItemClick={() => setIsOpen(false)}
                     className="flex gap-3 rounded-xl border border-gray-100 p-3 hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-white/[0.03]"
                   >
                     <span className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
@@ -252,7 +298,7 @@ export default function NotificationDropdown() {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        className="max-w-3xl mx-4 my-4 max-h-[90vh] overflow-hidden flex flex-col"
+        className="mx-4 my-4 flex max-h-[90vh] max-w-3xl flex-col overflow-hidden"
       >
         <div className="border-b border-gray-100 px-6 pb-4 pt-6 dark:border-gray-800">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Tất cả thông báo</h2>
@@ -262,8 +308,8 @@ export default function NotificationDropdown() {
         <div className="flex-1 overflow-hidden px-6 py-5">
           <div className="h-full max-h-[calc(90vh-140px)] overflow-y-auto pr-1 custom-scrollbar">
             <div className="flex flex-col gap-2">
-              {notifications.map((item) => (
-                <div key={item.id} className="flex gap-3 rounded-xl border border-gray-100 p-3 dark:border-gray-800">
+              {notifications.map((item, index) => (
+                <div key={getNotificationKey(item, index)} className="flex gap-3 rounded-xl border border-gray-100 p-3 dark:border-gray-800">
                   <span className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
                     <span className={`h-2.5 w-2.5 rounded-full ${badgeTone(item.kind)}`} />
                   </span>
