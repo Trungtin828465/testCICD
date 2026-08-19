@@ -194,6 +194,11 @@ function mapToShipment(row: SheetSummaryRow, totalMap: Map<string, SheetTotalRow
 }
 
 export async function fetchSheetTotalMap(): Promise<Map<string, SheetTotalRow>> {
+  console.log("[fetchSheetTotalMap] API_BASE =", API_BASE);
+  console.log(
+    "[fetchSheetTotalMap] URL =",
+    `${API_BASE}/api/getSheetTotal`
+  );
   const res = await fetch(`${API_BASE}/api/getSheetTotal`, { cache: "no-store" });
   if (!res.ok) throw new Error(`getSheetTotal lỗi: ${res.status}`);
   const json = await res.json();
