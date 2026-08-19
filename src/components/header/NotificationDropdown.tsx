@@ -1,7 +1,7 @@
 "use client";
 
 import { Modal } from "@/components/ui/modal";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 
@@ -112,14 +112,10 @@ export default function NotificationDropdown() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [badgeCount, setBadgeCount] = useState(0);
-  const [hasRealtimePulse, setHasRealtimePulse] = useState(false);
-  const refreshInFlight = useRef(false);
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const refreshNotifications = async () => {
-    if (refreshInFlight.current) return;
-    refreshInFlight.current = true;
+    setIsRefreshing(true);
 
     try {
       const res = await fetch(`${API_BASE}/api/sendNotification`, { cache: "no-store" });
@@ -135,72 +131,30 @@ export default function NotificationDropdown() {
       setError(err instanceof Error ? err.message : "Không tải được notification");
     } finally {
       setLoading(false);
-      refreshInFlight.current = false;
+      setIsRefreshing(false);
     }
   };
 
-  useEffect(() => {
-    void refreshNotifications();
-    return () => {
-      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
-      eventSourceRef.current?.close();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [API_BASE]);
-
-  useEffect(() => {
-    let closed = false;
-
-    const connect = () => {
-      if (closed) return;
-
-      eventSourceRef.current?.close();
-      const es = new EventSource(`${API_BASE}/notifications/stream`);
-      eventSourceRef.current = es;
-
-      es.addEventListener("notification_changed", () => {
-        setHasRealtimePulse(true);
-        void refreshNotifications();
-      });
-
-      es.onerror = () => {
-        if (closed) return;
-        es.close();
-        if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
-        reconnectTimer.current = setTimeout(connect, 3000);
-      };
-    };
-
-    connect();
-
-    return () => {
-      closed = true;
-      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
-      eventSourceRef.current?.close();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [API_BASE]);
-
   const latestThree = useMemo(() => notifications.slice(0, 3), [notifications]);
   const hasUnread = badgeCount > 0 || notifications.length > 0;
-
   const badgeTone = (kind: NotificationKind) => (kind === "delivered" ? "bg-success-500" : "bg-error-500");
+
+  const handleToggleNotifications = () => {
+    setIsOpen((prev) => {
+      const next = !prev;
+      if (next) void refreshNotifications();
+      return next;
+    });
+  };
 
   return (
     <div className="relative">
       <button
         className="relative flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
-        onClick={() => {
-          setIsOpen((prev) => !prev);
-          setHasRealtimePulse(false);
-        }}
+        onClick={handleToggleNotifications}
         title="Thông báo"
       >
-        {hasUnread && hasRealtimePulse ? (
-          <span className="absolute right-0 top-0.5 z-10 h-2 w-2 rounded-full bg-orange-400">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-orange-400 opacity-75" />
-          </span>
-        ) : null}
+        {hasUnread ? <span className="absolute right-0 top-0.5 z-10 h-2 w-2 rounded-full bg-orange-400" /> : null}
         <svg className="fill-current" width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
           <path
             fillRule="evenodd"
@@ -237,7 +191,7 @@ export default function NotificationDropdown() {
         </div>
 
         <div className="max-h-[420px] overflow-y-auto custom-scrollbar">
-          {loading ? (
+          {loading || isRefreshing ? (
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm text-gray-500 dark:border-gray-800 dark:bg-white/[0.02] dark:text-gray-400">
               Đang tải thông báo...
             </div>
@@ -266,13 +220,14 @@ export default function NotificationDropdown() {
                         {item.title}
                       </span>
                       <span className="block text-theme-xs text-gray-500 dark:text-gray-400">{item.body}</span>
-                      {item.kind === "missing_docs" && item.updatedBy ? (
-                        <span className="mt-1 block text-theme-xs font-medium text-amber-700 dark:text-amber-400">
-                          Người thực hiện: {item.updatedBy}
-                        </span>
-                      ) : null}
                       <span className="mt-1 flex items-center gap-2 text-theme-xs text-gray-400 dark:text-gray-500">
                         <span className="font-medium text-gray-600 dark:text-gray-300">{item.orderCode}</span>
+                        {item.updatedBy ? (
+                          <>
+                            <span className="h-1 w-1 rounded-full bg-gray-400" />
+                            <span>{item.updatedBy}</span>
+                          </>
+                        ) : null}
                         <span className="h-1 w-1 rounded-full bg-gray-400" />
                         <span>{formatTime(item.time)}</span>
                       </span>
@@ -319,19 +274,13 @@ export default function NotificationDropdown() {
                       {item.title}
                     </span>
                     <span className="block text-xs text-gray-500 dark:text-gray-400">{item.body}</span>
-                    {item.kind === "missing_docs" && item.updatedBy ? (
+                    {item.updatedBy ? (
                       <span className="mt-1 block text-xs font-medium text-amber-700 dark:text-amber-400">
                         Người thực hiện: {item.updatedBy}
                       </span>
                     ) : null}
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-400 dark:text-gray-500">
                       <span className="font-medium text-gray-600 dark:text-gray-300">{item.orderCode}</span>
-                      {item.updatedBy ? (
-                        <>
-                          <span className="h-1 w-1 rounded-full bg-gray-400" />
-                          <span>{item.updatedBy}</span>
-                        </>
-                      ) : null}
                       <span className="h-1 w-1 rounded-full bg-gray-400" />
                       <span>{formatTime(item.time)}</span>
                     </div>

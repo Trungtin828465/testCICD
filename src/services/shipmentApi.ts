@@ -147,9 +147,15 @@ function mapToShipment(row: SheetSummaryRow, totalMap: Map<string, SheetTotalRow
   const flowStage = deriveFlowStage(documents, eta);
   const hasCompletedDocs = totalDocs > 0 && receivedDocs >= totalDocs;
   const isDelivered = Boolean(traCong) || (docInfo?.status === 1 && hasCompletedDocs);
+  const isCompleted = hasCompletedDocs || isDelivered;
   const finalFlowStageKey: FlowStageKey = isDelivered ? "delivered" : flowStage.key;
   const finalFlowStageLabel = isDelivered ? "Giao hàng thành công" : flowStage.label;
-  const isLate = !isDelivered && flowStage.isLate;
+  const isLate = !isCompleted && flowStage.isLate;
+  const shipmentStatus: Shipment["status"] = isDelivered || isCompleted
+    ? "completed"
+    : flowStage.key === "buying"
+      ? "missing_docs"
+      : "shipping";
 
   return {
     id: `SH-${orderCode}-${index}`,
@@ -166,7 +172,7 @@ function mapToShipment(row: SheetSummaryRow, totalMap: Map<string, SheetTotalRow
     ata,
     port: String(row["Cảng"] ?? "").trim() || undefined,
     contCount: typeof row["Cont"] === "number" ? row["Cont"] : undefined,
-    status: isDelivered ? "completed" : flowStage.key === "buying" ? "missing_docs" : "shipping",
+    status: shipmentStatus,
     docStatus: docInfo?.status ?? 0,
     traCong: traCong || undefined,
     flowStageKey: finalFlowStageKey,
@@ -187,7 +193,7 @@ function mapToShipment(row: SheetSummaryRow, totalMap: Map<string, SheetTotalRow
   };
 }
 
-async function fetchSheetTotalMap(): Promise<Map<string, SheetTotalRow>> {
+export async function fetchSheetTotalMap(): Promise<Map<string, SheetTotalRow>> {
   const res = await fetch(`${API_BASE}/api/getSheetTotal`, { cache: "no-store" });
   if (!res.ok) throw new Error(`getSheetTotal lỗi: ${res.status}`);
   const json = await res.json();
@@ -199,7 +205,7 @@ async function fetchSheetTotalMap(): Promise<Map<string, SheetTotalRow>> {
   return map;
 }
 
-async function fetchSheetSummaryRows(): Promise<{ rows: SheetSummaryRow[]; updatedAt: string }> {
+export async function fetchSheetSummaryRows(): Promise<{ rows: SheetSummaryRow[]; updatedAt: string }> {
   const res = await fetch(`${API_BASE}/api/getSheetSummary`, { cache: "no-store" });
   if (!res.ok) throw new Error(`getSheetSummary lỗi: ${res.status}`);
   const json = await res.json();
@@ -210,15 +216,9 @@ async function fetchSheetSummaryRows(): Promise<{ rows: SheetSummaryRow[]; updat
 }
 
 export async function fetchShipments() {
-  const [totalResult, summaryResult] = await Promise.allSettled([fetchSheetTotalMap(), fetchSheetSummaryRows()]);
-  if (totalResult.status === "rejected" && summaryResult.status === "rejected") {
-    return { shipments: [], lastUpdated: new Date().toISOString(), updatedBy: "", error: String(summaryResult.reason) };
-  }
-  const totalMap = totalResult.status === "fulfilled" ? totalResult.value : new Map<string, SheetTotalRow>();
-  if (summaryResult.status === "rejected") {
-    return { shipments: [], lastUpdated: new Date().toISOString(), updatedBy: "", error: String(summaryResult.reason) };
-  }
-  const { rows, updatedAt } = summaryResult.value;
+  const summaryResult = await fetchSheetSummaryRows();
+  const totalMap = await fetchSheetTotalMap();
+  const { rows, updatedAt } = summaryResult;
   const shipments = rows.map((row, idx) => mapToShipment(row, totalMap, idx)).filter((s) => s.orderCode !== "");
   return { shipments, lastUpdated: updatedAt, updatedBy: "Admin hệ thống" };
 }

@@ -30,7 +30,6 @@ export default function ShipmentDashboard() {
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Load data
   const loadData = useCallback(async () => {
     setIsLoading(true);
     setApiError(null);
