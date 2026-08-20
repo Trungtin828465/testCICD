@@ -319,6 +319,7 @@ function mapToShipment(row: SheetSummaryRow, totalMap: Map<string, SheetTotalRow
   const receivedDocs = docInfo?.total_docs ?? 0;
   const missingDocs = docInfo?.mis_docs ?? "";
   const traCong = pickRowString(row, ["TRA_CONG", "TRA CONG", "TRA-CONG", "TRA CÔNG", "Trả công"]);
+  const telex = pickRowString(row, ["LỆNH GIAO HÀNG", "LENH GIAO HANG", "TELEX", "TELEX NO.", "TELEX NUMBER"]);
   const eta = parseDate(pickRowString(row, ["ETA", "Eta"]));
   const ata = parseDate(pickRowString(row, ["ATA", "Ata"]));
   const documents = docInfo ? buildDocuments(totalDocs, receivedDocs, missingDocs, row) : [];
@@ -353,6 +354,7 @@ function mapToShipment(row: SheetSummaryRow, totalMap: Map<string, SheetTotalRow
     status: shipmentStatus,
     docStatus: docInfo?.status ?? 0,
     traCong: traCong || undefined,
+    telex: telex || undefined,
     flowStageKey: finalFlowStageKey,
     flowStageLabel: finalFlowStageLabel,
     flowStageLate: isLate || undefined,

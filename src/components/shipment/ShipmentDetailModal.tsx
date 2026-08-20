@@ -395,6 +395,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
                   {shipment.ata && shipment.eta && (
                     <InfoRow label="So với ETA" value={formatAtaDelta(shipment.eta, shipment.ata) || undefined} />
                   )}
+                  <InfoRow label="Lệnh thả hàng" value={shipment.telex} />
                 </div>
               </div>
             </div>

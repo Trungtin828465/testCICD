@@ -61,6 +61,7 @@ export interface Shipment {
   etd?: string;                // ETD
   eta?: string;                // ETA
   ata?: string;                // Actual Time of Arrival (nếu có)
+  telex?: string;              // Telex
   port?: string;               // Cảng
   contCount?: number;          // Số cont
   status: ShipmentStatus;
@@ -154,6 +155,7 @@ export interface SheetSummaryRow {
   ETD: string;
   ETA: string;
   ATA?: string;
+  "LỆNH GIAO HÀNG": string;
   TRA_CONG?: string;
   Thùng: number;
   Trlg: number;

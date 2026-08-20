@@ -142,7 +142,7 @@ export default function ShipmentTable({ shipments, onRowClick }: ShipmentTablePr
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
+    <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
       {/* Table header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
         <div>
@@ -162,35 +162,33 @@ export default function ShipmentTable({ shipments, onRowClick }: ShipmentTablePr
         </div>
       </div>
 
-      {/* Scrollable table */}
-      {/* <div className="overflow-x-auto custom-scrollbar"> */}
-        <div className="max-h-[600px] w-full overflow-auto custom-scrollbar">
-          <table className="w-full min-w-[1100px] table-fixed">  
-            <thead className="sticky top-0 z-20 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+      <div className="w-full overflow-x-auto custom-scrollbar">
+          <table className="w-full min-w-[1100px] table-fixed border-separate border-spacing-0">
+            <thead className="border-b border-gray-100 dark:border-gray-800">
             <tr>
-              <th className="py-3 px-4 w-[4%] text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 w-10">STT</th>
-              <th className={`${headerCls} w-[12%]`} onClick={() => handleSort("orderCode")}>
+              <th className="sticky top-0 z-40 bg-gray-50/95 py-3 px-4 w-[4%] text-left text-xs font-semibold uppercase tracking-wider text-gray-500 backdrop-blur dark:bg-gray-900/95 dark:text-gray-400">STT</th>
+              <th className={`${headerCls} sticky top-0 z-40 bg-gray-50/95 w-[12%] backdrop-blur dark:bg-gray-900/95`} onClick={() => handleSort("orderCode")}>
                 <div className="flex items-center gap-1.5">Số HĐ <SortIcon col="orderCode" sortKey={sortKey} sortDir={sortDir} /></div>
               </th>
-              <th className={`${headerCls} w-[22%]`} onClick={() => handleSort("shipName")}>
+              <th className={`${headerCls} sticky top-0 z-40 bg-gray-50/95 w-[22%] backdrop-blur dark:bg-gray-900/95`} onClick={() => handleSort("shipName")}>
                 <div className="flex items-center gap-1.5">Tên hàng <SortIcon col="shipName" sortKey={sortKey} sortDir={sortDir} /></div>
               </th>
-              <th className={`${headerCls} w-[12%]`} onClick={() => handleSort("supplier")}>
+              <th className={`${headerCls} sticky top-0 z-40 bg-gray-50/95 w-[12%] backdrop-blur dark:bg-gray-900/95`} onClick={() => handleSort("supplier")}>
                 <div className="flex items-center gap-1.5">Nhà cung cấp <SortIcon col="supplier" sortKey={sortKey} sortDir={sortDir} /></div>
               </th>
-              <th className={`${headerCls} w-[11%]`}>
+              <th className={`${headerCls} sticky top-0 z-40 bg-gray-50/95 w-[11%] backdrop-blur dark:bg-gray-900/95`}>
                 Cảng / Tàu
               </th>
-              <th className={`${headerCls} w-[13%]`} onClick={() => handleSort("eta")}>
+              <th className={`${headerCls} sticky top-0 z-40 bg-gray-50/95 w-[13%] backdrop-blur dark:bg-gray-900/95`} onClick={() => handleSort("eta")}>
                 <div className="flex items-center gap-1.5">ETD / ETA <SortIcon col="eta" sortKey={sortKey} sortDir={sortDir} /></div>
               </th>
-              <th className={`${headerCls} w-[15%]`} onClick={() => handleSort("status")}>
+              <th className={`${headerCls} sticky top-0 z-40 bg-gray-50/95 w-[15%] backdrop-blur dark:bg-gray-900/95`} onClick={() => handleSort("status")}>
                 <div className="flex items-center gap-1.5">Trạng thái <SortIcon col="status" sortKey={sortKey} sortDir={sortDir} /></div>
               </th>
-              <th className={`${headerCls} w-[15%]`} onClick={() => handleSort("receivedDocs")}>
+              <th className={`${headerCls} sticky top-0 z-40 bg-gray-50/95 w-[15%] backdrop-blur dark:bg-gray-900/95`} onClick={() => handleSort("receivedDocs")}>
                 <div className="flex items-center gap-1.5">Giấy tờ <SortIcon col="receivedDocs" sortKey={sortKey} sortDir={sortDir} /></div>
               </th>
-              <th className="py-3 px-4 w-[5%]  text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Chi tiết</th>
+              <th className="sticky top-0 z-40 bg-gray-50/95 py-3 px-4 w-[5%] text-center text-xs font-semibold uppercase tracking-wider text-gray-500 backdrop-blur dark:bg-gray-900/95 dark:text-gray-400">Chi tiết</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
