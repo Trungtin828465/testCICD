@@ -114,25 +114,203 @@ function buildDocuments(
   }).reverse();
 }
 
+
 function deriveFlowStage(
   documents: import("@/types/shipment").ShipmentDocument[],
   eta?: string
 ): { key: FlowStageKey; label: string; isLate?: boolean } {
-  const has = (k: string) => hasDoc(documents, k);
-  const today = new Date();
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const etaLate = Boolean(eta && new Date(`${eta}T00:00:00`) < todayStart);
 
-  if (has("TRA_CONG")) return { key: "delivered", label: "Giao hàng thành công" };
-  if (has("QDTQ") || has("MV")) return { key: "customs", label: "Thông quan", isLate: etaLate };
-  if (has("15B")) return { key: "fifteenb", label: "Mẫu 15B", isLate: etaLate };
-  if (has("BB_LM") || has("PHI_TK") || has("THUE_NK")) return { key: "declared", label: "Nộp tờ khai", isLate: etaLate };
-  if (has("DON_KD") || has("AN")) return { key: "arrived", label: "Đã đến cảng", isLate: etaLate };
-  if (has("INV") || has("PKL") || has("BL") || has("CO") || has("HC")|| has("BL")) {
-    return { key: "shipping", label: "Đang vận chuyển biển", isLate: etaLate };
+  const has = (k: string) => hasDoc(documents, k);
+
+  const today = new Date();
+
+  const todayStart = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  );
+
+  const etaLate = Boolean(
+    eta && new Date(`${eta}T00:00:00`) < todayStart
+  );
+
+  /**
+   * =========================================================
+   * GIAI ĐOẠN 1
+   * Lên đơn hàng
+   *
+   * Điều kiện hoàn thành:
+   * PI
+   * =========================================================
+   */
+
+  const stage1Complete = has("PI");
+
+  if (!stage1Complete) {
+    return {
+      key: "buying",
+      label: "Lên đơn hàng",
+      isLate: etaLate
+    };
   }
-  return { key: "buying", label: "Lên đơn hàng", isLate: etaLate };
+
+
+  /**
+   * =========================================================
+   * GIAI ĐOẠN 2
+   * Đang vận chuyển biển
+   *
+   * Điều kiện hoàn thành:
+   * INV + PKL + CO + HC + BL
+   *
+   * Nếu thiếu bất kỳ chứng từ nào thì vẫn dừng ở đây.
+   * =========================================================
+   */
+
+  const stage2Required = [
+    "INV",
+    "PKL",
+    "CO",
+    "HC",
+    "BL"
+  ];
+
+  const stage2Complete = stage2Required.every(has);
+
+  if (!stage2Complete) {
+    return {
+      key: "shipping",
+      label: "Đang vận chuyển biển",
+      isLate: etaLate
+    };
+  }
+
+
+  /**
+   * =========================================================
+   * GIAI ĐOẠN 3
+   * Đã đến cảng
+   *
+   * Điều kiện hoàn thành:
+   * DON_KD + AN
+   *
+   * Nếu thiếu DON_KD hoặc AN thì vẫn dừng ở đây.
+   * =========================================================
+   */
+
+  const stage3Required = [
+    "DON_KD",
+    "AN"
+  ];
+
+  const stage3Complete = stage3Required.every(has);
+
+  if (!stage3Complete) {
+    return {
+      key: "arrived",
+      label: "Đã đến cảng",
+      isLate: etaLate
+    };
+  }
+
+
+  /**
+   * =========================================================
+   * GIAI ĐOẠN 4
+   * Nộp tờ khai
+   *
+   * Điều kiện hoàn thành:
+   * BB_LM + PHI_TK + THUE_NK
+   *
+   * Nếu thiếu bất kỳ chứng từ nào thì vẫn dừng ở đây.
+   * =========================================================
+   */
+
+  const stage4Required = [
+    "BB_LM",
+    "PHI_TK",
+    "THUE_NK"
+  ];
+
+  const stage4Complete = stage4Required.every(has);
+
+  if (!stage4Complete) {
+    return {
+      key: "declared",
+      label: "Nộp tờ khai",
+      isLate: etaLate
+    };
+  }
+
+
+  /**
+   * =========================================================
+   * GIAI ĐOẠN 5
+   * Thông quan
+   *
+   * Điều kiện hoàn thành:
+   * QDTQ + MV
+   * =========================================================
+   */
+
+  const stage5Required = [
+    "QDTQ",
+    "MV"
+  ];
+
+  const stage5Complete = stage5Required.every(has);
+
+  if (!stage5Complete) {
+    return {
+      key: "customs",
+      label: "Thông quan",
+      isLate: etaLate
+    };
+  }
+
+
+  /**
+   * =========================================================
+   * GIAI ĐOẠN 6
+   * Giao hàng thành công
+   *
+   * Điều kiện:
+   * TRA_CONG
+   * =========================================================
+   */
+
+  if (!has("TRA_CONG")) {
+    return {
+      key: "customs",
+      label: "Thông quan",
+      isLate: etaLate
+    };
+  }
+
+  return {
+    key: "delivered",
+    label: "Giao hàng thành công"
+  };
 }
+// function deriveFlowStage(
+//   documents: import("@/types/shipment").ShipmentDocument[],
+//   eta?: string
+// ): { key: FlowStageKey; label: string; isLate?: boolean } {
+//   const has = (k: string) => hasDoc(documents, k);
+//   const today = new Date();
+//   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+//   const etaLate = Boolean(eta && new Date(`${eta}T00:00:00`) < todayStart);
+
+//   if (has("TRA_CONG")) return { key: "delivered", label: "Giao hàng thành công" };
+//   if (has("QDTQ") || has("MV")) return { key: "customs", label: "Thông quan", isLate: etaLate };
+//   if (has("15B")) return { key: "fifteenb", label: "Mẫu 15B", isLate: etaLate };
+//   if (has("BB_LM") || has("PHI_TK") || has("THUE_NK")) return { key: "declared", label: "Nộp tờ khai", isLate: etaLate };
+//   if (has("DON_KD") || has("AN")) return { key: "arrived", label: "Đã đến cảng", isLate: etaLate };
+//   if (has("INV") || has("PKL") || has("BL") || has("CO") || has("HC")|| has("BL")) {
+//     return { key: "shipping", label: "Đang vận chuyển biển", isLate: etaLate };
+//   }
+//   return { key: "buying", label: "Lên đơn hàng", isLate: etaLate };
+// }
 
 function mapToShipment(row: SheetSummaryRow, totalMap: Map<string, SheetTotalRow>, index: number): Shipment {
   const orderCode = String(row["Số HĐ"] ?? "").trim();
