@@ -163,33 +163,34 @@ export default function ShipmentTable({ shipments, onRowClick }: ShipmentTablePr
       </div>
 
       {/* Scrollable table */}
-      <div className="overflow-x-auto custom-scrollbar">
-        <table className="w-full min-w-[820px]">
-          <thead className="sticky top-0 z-10 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+      {/* <div className="overflow-x-auto custom-scrollbar"> */}
+        <div className="max-h-[600px] w-full overflow-auto custom-scrollbar">
+          <table className="w-full min-w-[1100px] table-fixed">  
+            <thead className="sticky top-0 z-20 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
             <tr>
-              <th className="py-3 px-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 w-10">#</th>
-              <th className={headerCls} onClick={() => handleSort("orderCode")}>
+              <th className="py-3 px-4 w-[4%] text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 w-10">STT</th>
+              <th className={`${headerCls} w-[12%]`} onClick={() => handleSort("orderCode")}>
                 <div className="flex items-center gap-1.5">Số HĐ <SortIcon col="orderCode" sortKey={sortKey} sortDir={sortDir} /></div>
               </th>
-              <th className={headerCls} onClick={() => handleSort("shipName")}>
+              <th className={`${headerCls} w-[22%]`} onClick={() => handleSort("shipName")}>
                 <div className="flex items-center gap-1.5">Tên hàng <SortIcon col="shipName" sortKey={sortKey} sortDir={sortDir} /></div>
               </th>
-              <th className={headerCls} onClick={() => handleSort("supplier")}>
+              <th className={`${headerCls} w-[12%]`} onClick={() => handleSort("supplier")}>
                 <div className="flex items-center gap-1.5">Nhà cung cấp <SortIcon col="supplier" sortKey={sortKey} sortDir={sortDir} /></div>
               </th>
-              <th className={headerCls}>
+              <th className={`${headerCls} w-[11%]`}>
                 Cảng / Tàu
               </th>
-              <th className={headerCls} onClick={() => handleSort("eta")}>
+              <th className={`${headerCls} w-[13%]`} onClick={() => handleSort("eta")}>
                 <div className="flex items-center gap-1.5">ETD / ETA <SortIcon col="eta" sortKey={sortKey} sortDir={sortDir} /></div>
               </th>
-              <th className={headerCls} onClick={() => handleSort("status")}>
+              <th className={`${headerCls} w-[15%]`} onClick={() => handleSort("status")}>
                 <div className="flex items-center gap-1.5">Trạng thái <SortIcon col="status" sortKey={sortKey} sortDir={sortDir} /></div>
               </th>
-              <th className={headerCls} onClick={() => handleSort("receivedDocs")}>
+              <th className={`${headerCls} w-[15%]`} onClick={() => handleSort("receivedDocs")}>
                 <div className="flex items-center gap-1.5">Giấy tờ <SortIcon col="receivedDocs" sortKey={sortKey} sortDir={sortDir} /></div>
               </th>
-              <th className="py-3 px-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Chi tiết</th>
+              <th className="py-3 px-4 w-[5%]  text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Chi tiết</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
@@ -238,7 +239,13 @@ export default function ShipmentTable({ shipments, onRowClick }: ShipmentTablePr
                     {/* Ship name */}
                     <td className="py-3.5 px-4">
                       <div className="flex flex-col gap-0.5">
-                        <p className="text-sm font-medium text-gray-800 dark:text-white/90 max-w-[200px] truncate" title={shipment.shipName}>
+                        {/* <p className="text-sm font-medium text-gray-800 dark:text-white/90 max-w-[200px] truncate" title={shipment.shipName}>
+                          {shipment.shipName}
+                        </p> */}
+                        <p
+                          className="text-sm font-medium text-gray-800 dark:text-white/90 truncate w-full"
+                          title={shipment.shipName}
+                        >
                           {shipment.shipName}
                         </p>
                         {shipment.factory && (
@@ -249,7 +256,7 @@ export default function ShipmentTable({ shipments, onRowClick }: ShipmentTablePr
 
                     {/* Supplier */}
                     <td className="py-3.5 px-4">
-                      <p className="text-xs font-medium text-gray-700 dark:text-gray-300">{shipment.supplier}</p>
+                      <p className="text-xs font-medium text-gray-700 truncate dark:text-gray-300">{shipment.supplier}</p>
                     </td>
 
                     {/* Port / Vessel */}
@@ -260,7 +267,7 @@ export default function ShipmentTable({ shipments, onRowClick }: ShipmentTablePr
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 flex-shrink-0">
                               <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
                             </svg>
-                            <span className="text-xs text-gray-600 dark:text-gray-300">{shipment.port}</span>
+                            <span className="text-xs text-gray-600 dark:text-gray-300 truncate">{shipment.port}</span>
                           </div>
                         )}
                         {shipment.vessel && (
@@ -268,7 +275,7 @@ export default function ShipmentTable({ shipments, onRowClick }: ShipmentTablePr
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 flex-shrink-0">
                               <path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>
                             </svg>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">{shipment.vessel}</span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400 truncate">{shipment.vessel}</span>
                           </div>
                         )}
                       </div>
@@ -280,13 +287,13 @@ export default function ShipmentTable({ shipments, onRowClick }: ShipmentTablePr
                         {shipment.etd && (
                           <div className="flex items-center gap-1.5">
                             <span className="text-[10px] text-gray-400 w-7">ETD</span>
-                            <span className="text-xs font-medium text-gray-600 dark:text-gray-300">{formatDate(shipment.etd)}</span>
+                            <span className="text-xs font-medium text-gray-600 dark:text-gray-300 truncate">{formatDate(shipment.etd)}</span>
                           </div>
                         )}
                         {shipment.eta && (
                           <div className="flex items-center gap-1.5">
                             <span className="text-[10px] text-brand-400 w-7">ETA</span>
-                            <span className="text-xs font-medium text-gray-700 dark:text-gray-200">{formatDate(shipment.eta)}</span>
+                            <span className="text-xs font-medium text-gray-700 dark:text-gray-200 truncate">{formatDate(shipment.eta)}</span>
                           </div>
                         )}
                       </div>
