@@ -64,11 +64,11 @@ function DocBar({ total, received, missingList }: { total: number; received: num
       <div className="flex items-center gap-2">
         <div className="w-20 h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
           <div
-            className={`h-full rounded-full transition-all ${missing > 0 ? "bg-error-500" : "bg-success-500"}`}
+            className={`h-full rounded-full transition-all ${missing > 0 ? "bg-blue-500" : "bg-success-500"}`}
             style={{ width: `${pct}%` }}
           />
         </div>
-        <span className={`text-xs font-medium tabular-nums ${missing > 0 ? "text-error-600" : "text-success-600"}`}>
+        <span className={`text-xs font-medium tabular-nums ${missing > 0 ? "text-blue-600" : "text-success-600"}`}>
           {received}/{total}
         </span>
       </div>
@@ -165,7 +165,7 @@ export default function ShipmentTable({ shipments, onRowClick }: ShipmentTablePr
       {/* Scrollable table */}
       <div className="overflow-x-auto custom-scrollbar">
         <table className="w-full min-w-[820px]">
-          <thead className="border-b border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-white/[0.02]">
+          <thead className="sticky top-0 z-10 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
             <tr>
               <th className="py-3 px-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 w-10">#</th>
               <th className={headerCls} onClick={() => handleSort("orderCode")}>

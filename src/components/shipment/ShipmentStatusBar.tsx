@@ -37,11 +37,7 @@ export default function ShipmentStatusBar({ activeStage, stages, isLate, hasOutO
   const activeIndex = Math.max(0, stages.findIndex((s) => s.key === activeStage));
 
   const getTone = (index: number) => {
-    if (activeStage === "delivered") return "success";
-    if (hasOutOfOrderDocs && index <= activeIndex) return "danger";
-    if (index === 0) return "warning";
-    if (isLate && index <= 5) return "danger";
-    if (index <= activeIndex) return activeStage === "buying" ? "warning" : "primary";
+    if (index <= activeIndex) return "success";
     return "muted";
   };
 
