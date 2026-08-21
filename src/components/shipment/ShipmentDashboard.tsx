@@ -130,7 +130,7 @@ export default function ShipmentDashboard() {
   };
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex min-w-0 flex-col gap-5">
       {/* Page title */}
       <div className="flex items-start justify-between">
         <div>

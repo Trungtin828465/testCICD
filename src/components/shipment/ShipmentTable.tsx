@@ -22,6 +22,15 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
 type SortKey = "orderCode" | "shipName" | "supplier" | "eta" | "status" | "receivedDocs";
 type SortDir = "asc" | "desc";
 
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: "orderCode", label: "Số HĐ" },
+  { value: "shipName", label: "Tên hàng" },
+  { value: "supplier", label: "Nhà cung cấp" },
+  { value: "eta", label: "ETA" },
+  { value: "status", label: "Trạng thái" },
+  { value: "receivedDocs", label: "Giấy tờ" },
+];
+
 function SortIcon({
   col,
   sortKey,
@@ -77,6 +86,93 @@ function DocBar({ total, received, missingList }: { total: number; received: num
           Thiếu: {missingList}
         </p>
       )}
+    </div>
+  );
+}
+
+function ShipmentCard({
+  shipment,
+  onClick,
+}: {
+  shipment: Shipment;
+  onClick: () => void;
+}) {
+  const statusKey = shipment.flowStageKey || "buying";
+  const sc = STATUS_CONFIG[statusKey] || STATUS_CONFIG.buying;
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onClick();
+    }
+  };
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={handleKeyDown}
+      className="rounded-xl border border-gray-200 bg-white p-4 text-left shadow-theme-xs transition-colors hover:border-brand-300 hover:bg-brand-50/30 dark:border-gray-700 dark:bg-gray-800/40 dark:hover:border-brand-500/50 dark:hover:bg-brand-500/5"
+    >
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate font-mono text-sm font-semibold text-brand-600 dark:text-brand-400" title={shipment.orderCode}>
+            {shipment.orderCode}
+          </p>
+          <p className="mt-1 truncate text-sm font-medium text-gray-800 dark:text-white/90" title={shipment.shipName}>
+            {shipment.shipName}
+          </p>
+        </div>
+        <button
+          type="button"
+          aria-label={`Xem chi tiết ${shipment.orderCode}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onClick();
+          }}
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-400 transition-all hover:border-brand-300 hover:bg-brand-50 hover:text-brand-600 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-brand-500/50 dark:hover:bg-brand-500/10 dark:hover:text-brand-400"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+        </button>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-gray-100 pt-3 dark:border-gray-700">
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-wide text-gray-400">Nhà cung cấp</p>
+          <p className="mt-0.5 truncate text-xs font-medium text-gray-700 dark:text-gray-300" title={shipment.supplier}>
+            {shipment.supplier || "—"}
+          </p>
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-wide text-gray-400">Cảng / Tàu</p>
+          <p className="mt-0.5 truncate text-xs text-gray-600 dark:text-gray-300" title={[shipment.port, shipment.vessel].filter(Boolean).join(" / ")}>
+            {[shipment.port, shipment.vessel].filter(Boolean).join(" / ") || "—"}
+          </p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-gray-400">ETD</p>
+          <p className="mt-0.5 text-xs font-medium text-gray-600 dark:text-gray-300">{formatDate(shipment.etd)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-gray-400">ETA</p>
+          <p className="mt-0.5 text-xs font-medium text-brand-600 dark:text-brand-400">{formatDate(shipment.eta)}</p>
+        </div>
+      </div>
+
+      <div className="mt-3 flex min-w-0 items-center justify-between gap-3 border-t border-gray-100 pt-3 dark:border-gray-700">
+        <span
+          className={`inline-flex max-w-[62%] min-w-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${sc.color} ${sc.bg}`}
+          title={shipment.flowStageLabel || sc.label}
+        >
+          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${sc.dot}`} />
+          <span className="truncate">{shipment.flowStageLabel || sc.label}</span>
+        </span>
+        <DocBar total={shipment.totalDocs} received={shipment.receivedDocs} missingList={shipment.missingDocs} />
+      </div>
     </div>
   );
 }
@@ -142,17 +238,17 @@ export default function ShipmentTable({ shipments, onRowClick }: ShipmentTablePr
   }
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
+    <div className="min-w-0 rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
       {/* Table header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
-        <div>
+      <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-4 dark:border-gray-800 sm:px-5">
+        <div className="min-w-0">
           <h3 className="text-base font-semibold text-gray-800 dark:text-white/90">Danh sách đơn hàng</h3>
           <p className="text-xs text-gray-400 mt-0.5">
             {shipments.length} đơn hàng
             {shipments.length > 0 && ` • Trang ${safePage}/${totalPages}`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="hidden shrink-0 items-center gap-2 sm:flex">
           <span className="text-xs text-gray-400">Click vào hàng để xem chi tiết</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-300">
             <circle cx="12" cy="12" r="10"/>
@@ -162,33 +258,77 @@ export default function ShipmentTable({ shipments, onRowClick }: ShipmentTablePr
         </div>
       </div>
 
-      <div className="w-full">
-          <table className="w-full min-w-[1100px] table-fixed border-separate border-spacing-0">
+      {/* Mobile card layout */}
+      <div className="space-y-3 p-4 lg:hidden">
+        <div className="flex items-end gap-2">
+          <div className="min-w-0 flex-1">
+            <label htmlFor="shipment-mobile-sort" className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
+              Sắp xếp theo
+            </label>
+            <select
+              id="shipment-mobile-sort"
+              value={sortKey}
+              onChange={(event) => handleSort(event.target.value as SortKey)}
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100 dark:border-gray-700 dark:bg-gray-800/50 dark:text-white"
+            >
+              {SORT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            aria-label={sortDir === "asc" ? "Sắp xếp giảm dần" : "Sắp xếp tăng dần"}
+            onClick={() => setSortDir((direction) => direction === "asc" ? "desc" : "asc")}
+            className="inline-flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-gray-500 transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-600 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400 dark:hover:border-brand-500/50 dark:hover:bg-brand-500/10"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              {sortDir === "asc" ? <path d="m18 15-6-6-6 6" /> : <path d="m6 9 6 6 6-6" />}
+            </svg>
+          </button>
+        </div>
+
+        {paged.length === 0 ? (
+          <div className="py-10 text-center text-sm text-gray-400">Không tìm thấy đơn hàng nào</div>
+        ) : (
+          paged.map((shipment) => (
+            <ShipmentCard
+              key={shipment.id}
+              shipment={shipment}
+              onClick={() => onRowClick(shipment)}
+            />
+          ))
+        )}
+      </div>
+
+      {/* Desktop and tablet table layout */}
+      <div className="hidden w-full lg:block lg:max-xl:overflow-x-auto lg:max-xl:overscroll-x-contain lg:max-xl:custom-scrollbar">
+          <table className="w-full min-w-0 table-fixed border-separate border-spacing-0 [&_td]:overflow-hidden [&_th]:overflow-hidden lg:max-xl:min-w-[1120px]">
             <thead className="border-b border-gray-100 dark:border-gray-800">
             <tr>
-              <th className="sticky top-[65px] z-40 bg-gray-50/95 py-3 px-4 w-[4%] text-left text-xs font-semibold uppercase tracking-wider text-gray-500 backdrop-blur lg:top-[73px] dark:bg-gray-900/95 dark:text-gray-400">STT</th>
-              <th className={`${headerCls} sticky top-[65px] z-40 bg-gray-50/95 w-[12%] backdrop-blur lg:top-[73px] dark:bg-gray-900/95`} onClick={() => handleSort("orderCode")}>
+              <th className="sticky top-[65px] z-40 w-[4%] bg-gray-50/95 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 backdrop-blur lg:top-[73px] dark:bg-gray-900/95 dark:text-gray-400">STT</th>
+              <th className={`${headerCls} sticky top-[65px] z-40 bg-gray-50/95 w-[10%] backdrop-blur lg:top-[73px] dark:bg-gray-900/95`} onClick={() => handleSort("orderCode")}>
                 <div className="flex items-center gap-1.5">Số HĐ <SortIcon col="orderCode" sortKey={sortKey} sortDir={sortDir} /></div>
               </th>
-              <th className={`${headerCls} sticky top-[65px] z-40 bg-gray-50/95 w-[22%] backdrop-blur lg:top-[73px] dark:bg-gray-900/95`} onClick={() => handleSort("shipName")}>
+              <th className={`${headerCls} sticky top-[65px] z-40 bg-gray-50/95 w-[19%] backdrop-blur lg:top-[73px] dark:bg-gray-900/95`} onClick={() => handleSort("shipName")}>
                 <div className="flex items-center gap-1.5">Tên hàng <SortIcon col="shipName" sortKey={sortKey} sortDir={sortDir} /></div>
               </th>
-              <th className={`${headerCls} sticky top-[65px] z-40 bg-gray-50/95 w-[12%] backdrop-blur lg:top-[73px] dark:bg-gray-900/95`} onClick={() => handleSort("supplier")}>
+              <th className={`${headerCls} sticky top-[65px] z-40 bg-gray-50/95 w-[15%] backdrop-blur lg:top-[73px] dark:bg-gray-900/95`} onClick={() => handleSort("supplier")}>
                 <div className="flex items-center gap-1.5">Nhà cung cấp <SortIcon col="supplier" sortKey={sortKey} sortDir={sortDir} /></div>
               </th>
               <th className={`${headerCls} sticky top-[65px] z-40 bg-gray-50/95 w-[11%] backdrop-blur lg:top-[73px] dark:bg-gray-900/95`}>
                 Cảng / Tàu
               </th>
-              <th className={`${headerCls} sticky top-[65px] z-40 bg-gray-50/95 w-[13%] backdrop-blur lg:top-[73px] dark:bg-gray-900/95`} onClick={() => handleSort("eta")}>
+              <th className={`${headerCls} sticky top-[65px] z-40 bg-gray-50/95 w-[12%] backdrop-blur lg:top-[73px] dark:bg-gray-900/95`} onClick={() => handleSort("eta")}>
                 <div className="flex items-center gap-1.5">ETD / ETA <SortIcon col="eta" sortKey={sortKey} sortDir={sortDir} /></div>
               </th>
-              <th className={`${headerCls} sticky top-[65px] z-40 bg-gray-50/95 w-[15%] backdrop-blur lg:top-[73px] dark:bg-gray-900/95`} onClick={() => handleSort("status")}>
+              <th className={`${headerCls} sticky top-[65px] z-40 bg-gray-50/95 w-[14%] backdrop-blur lg:top-[73px] dark:bg-gray-900/95`} onClick={() => handleSort("status")}>
                 <div className="flex items-center gap-1.5">Trạng thái <SortIcon col="status" sortKey={sortKey} sortDir={sortDir} /></div>
               </th>
-              <th className={`${headerCls} sticky top-[65px] z-40 bg-gray-50/95 w-[15%] backdrop-blur lg:top-[73px] dark:bg-gray-900/95`} onClick={() => handleSort("receivedDocs")}>
+              <th className={`${headerCls} sticky top-[65px] z-40 bg-gray-50/95 w-[14%] backdrop-blur lg:top-[73px] dark:bg-gray-900/95`} onClick={() => handleSort("receivedDocs")}>
                 <div className="flex items-center gap-1.5">Giấy tờ <SortIcon col="receivedDocs" sortKey={sortKey} sortDir={sortDir} /></div>
               </th>
-              <th className="sticky top-[65px] z-40 bg-gray-50/95 py-3 px-4 w-[5%] text-center text-xs font-semibold uppercase tracking-wider text-gray-500 backdrop-blur lg:top-[73px] dark:bg-gray-900/95 dark:text-gray-400">Chi tiết</th>
+              <th className="sticky top-[65px] z-40 bg-gray-50/95 py-3 px-4 w-[5%] text-center text-xs font-semibold uppercase tracking-wider text-gray-500 backdrop-blur lg:top-[73px] dark:bg-gray-900/95 dark:text-gray-400">Xem</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
@@ -223,7 +363,7 @@ export default function ShipmentTable({ shipments, onRowClick }: ShipmentTablePr
                     {/* Order code */}
                     <td className="py-3.5 px-4">
                       <div className="flex flex-col gap-0.5">
-                        <span className="font-mono text-sm font-semibold text-brand-600 dark:text-brand-400 group-hover:text-brand-700">
+                        <span className="truncate font-mono text-sm font-semibold text-brand-600 group-hover:text-brand-700 dark:text-brand-400" title={shipment.orderCode}>
                           {shipment.orderCode}
                         </span>
                         {shipment.bill && (
@@ -254,7 +394,7 @@ export default function ShipmentTable({ shipments, onRowClick }: ShipmentTablePr
 
                     {/* Supplier */}
                     <td className="py-3.5 px-4">
-                      <p className="text-xs font-medium text-gray-700 truncate dark:text-gray-300">{shipment.supplier}</p>
+                      <p className="truncate text-xs font-medium text-gray-700 dark:text-gray-300" title={shipment.supplier}>{shipment.supplier}</p>
                     </td>
 
                     {/* Port / Vessel */}
@@ -265,7 +405,7 @@ export default function ShipmentTable({ shipments, onRowClick }: ShipmentTablePr
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 flex-shrink-0">
                               <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
                             </svg>
-                            <span className="text-xs text-gray-600 dark:text-gray-300 truncate">{shipment.port}</span>
+                            <span className="truncate text-xs text-gray-600 dark:text-gray-300" title={shipment.port}>{shipment.port}</span>
                           </div>
                         )}
                         {shipment.vessel && (
@@ -273,7 +413,7 @@ export default function ShipmentTable({ shipments, onRowClick }: ShipmentTablePr
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 flex-shrink-0">
                               <path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>
                             </svg>
-                            <span className="text-xs text-gray-500 dark:text-gray-400 truncate">{shipment.vessel}</span>
+                            <span className="truncate text-xs text-gray-500 dark:text-gray-400" title={shipment.vessel}>{shipment.vessel}</span>
                           </div>
                         )}
                       </div>
@@ -299,9 +439,12 @@ export default function ShipmentTable({ shipments, onRowClick }: ShipmentTablePr
 
                     {/* Status */}
                     <td className="py-3.5 px-4">
-                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${sc.color} ${sc.bg}`}>
+                      <span
+                        className={`inline-flex max-w-full items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${sc.color} ${sc.bg}`}
+                        title={shipment.flowStageLabel || sc.label}
+                      >
                         <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${sc.dot}`} />
-                        {shipment.flowStageLabel || sc.label}
+                        <span className="truncate">{shipment.flowStageLabel || sc.label}</span>
                       </span>
                     </td>
 
@@ -336,11 +479,11 @@ export default function ShipmentTable({ shipments, onRowClick }: ShipmentTablePr
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-gray-800">
+        <div className="flex flex-col gap-3 border-t border-gray-100 px-4 py-3 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <p className="text-xs text-gray-400">
             Hiển thị <span className="font-medium text-gray-600 dark:text-gray-300">{(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, sorted.length)}</span> / {sorted.length} đơn hàng
           </p>
-          <div className="flex items-center gap-1">
+          <div className="flex max-w-full items-center gap-1 overflow-x-auto pb-1 sm:pb-0">
             {/* Prev */}
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
