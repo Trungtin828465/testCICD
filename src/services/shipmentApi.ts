@@ -392,12 +392,22 @@ export async function fetchSheetTotalMap(): Promise<Map<string, SheetTotalRow>> 
 
 export async function fetchSheetSummaryRows(): Promise<{ rows: SheetSummaryRow[]; updatedAt: string }> {
   const res = await fetch(`${API_BASE}/api/getSheetSummary`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`getSheetSummary lỗi: ${res.status}`);
-  const json = await res.json();
-  const rows: SheetSummaryRow[] = (json.data ?? []).filter(
+  const json = await res.json().catch(() => null) as {
+    data?: SheetSummaryRow[];
+    updatedAt?: string;
+    message?: string;
+    error?: string;
+  } | null;
+
+  if (!res.ok) {
+    const reason = json?.error || json?.message;
+    throw new Error(`getSheetSummary lỗi: ${res.status}${reason ? ` - ${reason}` : ""}`);
+  }
+
+  const rows: SheetSummaryRow[] = (json?.data ?? []).filter(
     (r: SheetSummaryRow) => r["Số HĐ"] != null && r["Số HĐ"] !== "" && r["Tên hàng"] != null && r["Tên hàng"] !== ""
   );
-  return { rows, updatedAt: json.updatedAt ?? new Date().toISOString() };
+  return { rows, updatedAt: json?.updatedAt ?? new Date().toISOString() };
 }
 
 export async function fetchShipments() {

@@ -33,12 +33,18 @@ export default function ShipmentDashboard() {
   const loadData = useCallback(async () => {
     setIsLoading(true);
     setApiError(null);
-    const result = await fetchShipments();
-    setShipments(result.shipments);
-    setLastUpdated(result.lastUpdated);
-    setUpdatedBy(result.updatedBy || "");
-    if (result.error) setApiError(result.error);
-    setIsLoading(false);
+
+    try {
+      const result = await fetchShipments();
+      setShipments(result.shipments);
+      setLastUpdated(result.lastUpdated);
+      setUpdatedBy(result.updatedBy || "");
+    } catch (error) {
+      // Keep existing rows visible when the API is temporarily unavailable.
+      setApiError(error instanceof Error ? error.message : "Không thể tải dữ liệu shipment");
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   useEffect(() => {

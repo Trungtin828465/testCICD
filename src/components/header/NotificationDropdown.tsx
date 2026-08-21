@@ -1,7 +1,7 @@
 "use client";
 
 import { Modal } from "@/components/ui/modal";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 
@@ -57,8 +57,8 @@ function isMissingDocsType(type?: string) {
 }
 
 function parseRows(json: NotificationApiResponse): NotificationRow[] {
-  if (Array.isArray(json.latest_notifications)) return json.latest_notifications;
   if (Array.isArray(json.all_notifications)) return json.all_notifications;
+  if (Array.isArray(json.latest_notifications)) return json.latest_notifications;
   if (Array.isArray(json.data?.data)) return json.data.data;
   return [];
 }
@@ -94,6 +94,14 @@ function mapRows(rows: NotificationRow[]): NotificationItem[] {
     .sort((a, b) => +new Date(b.time) - +new Date(a.time));
 }
 
+function isUnread(item: NotificationItem) {
+  return item.status === "0";
+}
+
+function getNotificationIdentity(item: NotificationItem) {
+  return `${item.id}-${item.orderCode}-${item.time}`;
+}
+
 function formatTime(iso: string) {
   return new Date(iso).toLocaleString("vi-VN", {
     day: "2-digit",
@@ -112,37 +120,86 @@ export default function NotificationDropdown() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [badgeCount, setBadgeCount] = useState(0);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const refreshNotifications = async () => {
-    setIsRefreshing(true);
-
+  const [hasNewNotification, setHasNewNotification] = useState(false);
+  const notificationStatusRef = useRef(new Map<string, string>());
+  const hasReceivedInitialPayloadRef = useRef(false);
+  const markNotificationsAsRead = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/sendNotification`, { cache: "no-store" });
-      if (!res.ok) throw new Error(`sendNotification lỗi: ${res.status}`);
+      const res = await fetch(`${API_BASE}/api/updateStatusNotification`, {
+        method: "PUT",
+        cache: "no-store",
+      });
 
-      const json = (await res.json()) as NotificationApiResponse;
-      const rows = parseRows(json);
-      const mapped = mapRows(rows);
-      setNotifications(mapped);
-      setBadgeCount(typeof json.latest_count === "number" ? json.latest_count : mapped.length);
+      if (!res.ok) throw new Error(`updateStatusNotification lỗi: ${res.status}`);
+
+      setNotifications((current) => current.map((item) => ({ ...item, status: "1" })));
+      setBadgeCount(0);
+      setHasNewNotification(false);
       setError("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không tải được notification");
-    } finally {
-      setLoading(false);
-      setIsRefreshing(false);
+      setError(err instanceof Error ? err.message : "Không thể cập nhật trạng thái thông báo");
     }
   };
 
+  useEffect(() => {
+    const eventSource = new EventSource(`${API_BASE}/api/notifications/stream`);
+
+    const handleNotification = (event: MessageEvent<string>) => {
+      try {
+        const json = JSON.parse(event.data) as NotificationApiResponse;
+        const rows = parseRows(json);
+        const mapped = mapRows(rows);
+        const isInitialPayload = !hasReceivedInitialPayloadRef.current;
+        const nextStatusMap = new Map<string, string>();
+        let receivedNewNotification = false;
+
+        mapped.forEach((item) => {
+          const identity = getNotificationIdentity(item);
+          const previousStatus = notificationStatusRef.current.get(identity);
+          nextStatusMap.set(identity, item.status || "");
+
+          if (!isInitialPayload && isUnread(item) && previousStatus !== "0") {
+            receivedNewNotification = true;
+          }
+        });
+
+        notificationStatusRef.current = nextStatusMap;
+        hasReceivedInitialPayloadRef.current = true;
+        const unreadCount = mapped.filter(isUnread).length;
+
+        setNotifications(mapped);
+        setBadgeCount(unreadCount);
+        if (receivedNewNotification) setHasNewNotification(true);
+        setLoading(false);
+        setError("");
+      } catch {
+        setError("Không thể xử lý dữ liệu thông báo realtime");
+      }
+    };
+
+    eventSource.addEventListener("notification", handleNotification);
+    // Fallback for proxies/clients that strip the custom SSE event name.
+    eventSource.onmessage = handleNotification;
+    eventSource.onerror = () => {
+      setError("Mất kết nối realtime thông báo");
+    };
+
+    return () => {
+      eventSource.removeEventListener("notification", handleNotification);
+      eventSource.onmessage = null;
+      eventSource.close();
+    };
+  }, [API_BASE]);
+
   const latestThree = useMemo(() => notifications.slice(0, 3), [notifications]);
-  const hasUnread = badgeCount > 0 || notifications.length > 0;
+  const hasUnread = badgeCount > 0;
   const badgeTone = (kind: NotificationKind) => (kind === "delivered" ? "bg-success-500" : "bg-error-500");
 
   const handleToggleNotifications = () => {
     setIsOpen((prev) => {
       const next = !prev;
-      if (next) void refreshNotifications();
+      if (next) void markNotificationsAsRead();
+      if (next) setHasNewNotification(false);
       return next;
     });
   };
@@ -154,7 +211,11 @@ export default function NotificationDropdown() {
         onClick={handleToggleNotifications}
         title="Thông báo"
       >
-        {hasUnread ? <span className="absolute right-0 top-0.5 z-10 h-2 w-2 rounded-full bg-orange-400" /> : null}
+        {hasUnread ? (
+          <span className={`absolute -right-1 -top-1 z-10 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ${hasNewNotification ? "animate-pulse" : ""}`}>
+            {badgeCount > 99 ? "99+" : badgeCount}
+          </span>
+        ) : null}
         <svg className="fill-current" width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
           <path
             fillRule="evenodd"
@@ -191,7 +252,12 @@ export default function NotificationDropdown() {
         </div>
 
         <div className="max-h-[420px] overflow-y-auto custom-scrollbar">
-          {loading || isRefreshing ? (
+          {hasNewNotification ? (
+            <div className="mb-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
+              Có thông báo mới
+            </div>
+          ) : null}
+          {loading ? (
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm text-gray-500 dark:border-gray-800 dark:bg-white/[0.02] dark:text-gray-400">
               Đang tải thông báo...
             </div>
