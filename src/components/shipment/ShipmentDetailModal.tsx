@@ -48,17 +48,17 @@ const TAB_LIST: { key: ModalTab; label: string; icon: React.ReactNode }[] = [
       </svg>
     ),
   },
-  {
-    key: "history",
-    label: "Lịch sử",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="12 8 12 12 14 14"/>
-        <path d="M3.05 11a9 9 0 1 0 .5-4H1"/>
-        <polyline points="1 2 1 7 6 7"/>
-      </svg>
-    ),
-  },
+  // {
+  //   key: "history",
+  //   label: "Lịch sử",
+  //   icon: (
+  //     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  //       <polyline points="12 8 12 12 14 14"/>
+  //       <path d="M3.05 11a9 9 0 1 0 .5-4H1"/>
+  //       <polyline points="1 2 1 7 6 7"/>
+  //     </svg>
+  //   ),
+  // },
   {
     key: "folder",
     label: "Thư mục",
@@ -261,15 +261,27 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
   const statusInfo = STATUS_MAP[shipment.status];
   const flowLabel = shipment.flowStageLabel || statusInfo?.label;
   const hasStageWarning = hasOutOfOrderDocuments(shipment);
+  // const flowColor = shipment.flowStageKey === "delivered"
+  //   ? "text-success-600 bg-success-50 dark:bg-success-500/10"
+  //   : shipment.flowStageKey === "buying"
+  //   ? hasStageWarning
+  //     ? "text-error-600 bg-error-50 dark:bg-error-500/10"
+  //     : "text-amber-700 bg-amber-50 dark:bg-amber-500/10"
+  //   : hasStageWarning || shipment.flowStageLate
+  //   ? "text-error-600 bg-error-50 dark:bg-error-500/10"
+  //   : "text-blue-light-600 bg-blue-light-50 dark:bg-blue-light-500/10";
+
   const flowColor = shipment.flowStageKey === "delivered"
-    ? "text-success-600 bg-success-50 dark:bg-success-500/10"
-    : shipment.flowStageKey === "buying"
-    ? hasStageWarning
-      ? "text-error-600 bg-error-50 dark:bg-error-500/10"
-      : "text-amber-700 bg-amber-50 dark:bg-amber-500/10"
-    : hasStageWarning || shipment.flowStageLate
-    ? "text-error-600 bg-error-50 dark:bg-error-500/10"
-    : "text-blue-light-600 bg-blue-light-50 dark:bg-blue-light-500/10";
+  ? "text-success-600 bg-success-50 dark:bg-success-500/10"
+
+  : shipment.flowStageKey === "buying"
+  ? hasStageWarning
+    ? "text-blue-light-600 bg-blue-light-50 dark:bg-blue-light-500/10"
+    : "text-amber-700 bg-amber-50 dark:bg-amber-500/10"
+
+  : hasStageWarning || shipment.flowStageLate
+  ? "text-blue-light-600 bg-blue-light-50 dark:bg-blue-light-500/10"
+  : "text-blue-light-600 bg-blue-light-50 dark:bg-blue-light-500/10";
   const missingDocsCount = shipment.totalDocs - shipment.receivedDocs;
   const documentsSorted = [...(shipment.documents || [])].sort((a, b) => {
     if (a.status !== b.status) return a.status === "ok" ? -1 : 1;
