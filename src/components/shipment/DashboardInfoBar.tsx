@@ -105,15 +105,6 @@ export default function DashboardInfoBar({ lastUpdated, updatedBy, onRefresh }: 
                 {formatRelativeTime(lastUpdated)} · {formatDateTime(lastUpdated)}
                 {updatedBy && <span className="text-gray-400"> bởi {updatedBy}</span>}
               </p>
-              <button
-                type="button"
-                onClick={() => setShowHistory((v) => !v)}
-                className="flex h-5 w-5 items-center justify-center rounded-full border border-gray-200 text-[10px] font-bold text-gray-500 hover:border-brand-300 hover:text-brand-600 dark:border-gray-700 dark:hover:border-brand-500/50 dark:hover:text-brand-400"
-                aria-label="Xem lịch sử cập nhật"
-                title="Xem lịch sử cập nhật"
-              >
-                i
-              </button>
             </div>
             {showHistory && (
               <div className="mt-2 w-full max-w-sm rounded-xl border border-gray-200 bg-white p-3 shadow-lg dark:border-gray-800 dark:bg-gray-900">

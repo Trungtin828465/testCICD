@@ -108,8 +108,7 @@ export default function ShipmentDashboard() {
       // Date range
       let dateOk = true;
       if (filter.dateFrom || filter.dateTo) {
-        const field = filter.dateField || "eta";
-        const val = s[field as keyof Shipment] as string | undefined;
+        const val = s.eta;
         if (!val) {
           dateOk = false;
         } else {

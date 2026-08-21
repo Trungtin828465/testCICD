@@ -17,14 +17,20 @@ const STATUS_OPTIONS: { value: ShipmentStatus | "all"; label: string }[] = [
   { value: "missing_docs", label: "Thiếu giấy tờ" },
 ];
 
-const DATE_FIELD_OPTIONS: { value: "eta" | "etd"; label: string }[] = [
-  { value: "eta", label: "ETA" },
-  { value: "etd", label: "ETD" },
-];
-
 const inputCls =
   "w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100 dark:border-gray-700 dark:bg-gray-800/50 dark:text-white dark:focus:border-brand-500 dark:focus:ring-brand-500/20";
 const labelCls = "mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400";
+
+function CalendarIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="17" rx="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  );
+}
 
 export default function ShipmentFilters({
   filter,
@@ -53,16 +59,21 @@ export default function ShipmentFilters({
     onChange({ ...filter, vessel: e.target.value || undefined });
   };
 
-  const handleDateField = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    onChange({ ...filter, dateField: e.target.value as "eta" | "etd" });
-  };
-
   const handleDateFrom = (e: React.ChangeEvent<HTMLInputElement>) => {
     onChange({ ...filter, dateFrom: e.target.value });
   };
 
   const handleDateTo = (e: React.ChangeEvent<HTMLInputElement>) => {
     onChange({ ...filter, dateTo: e.target.value });
+  };
+
+  const openDatePicker = (input: HTMLInputElement | null) => {
+    if (!input) return;
+    if (typeof input.showPicker === "function") {
+      input.showPicker();
+    } else {
+      input.focus();
+    }
   };
 
   const handleClear = () => {
@@ -154,35 +165,51 @@ export default function ShipmentFilters({
         {/* Lọc theo */}
         <div className="w-full md:w-28">
           <label className={labelCls}>Lọc theo</label>
-          <select id="filter-datefield" value={filter.dateField || "eta"} onChange={handleDateField} className={inputCls}>
-            {DATE_FIELD_OPTIONS.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+          <div id="filter-datefield" className={inputCls}>ETA</div>
         </div>
 
         {/* Từ ngày */}
         <div className="w-full md:w-44">
           <label className={labelCls}>Từ ngày</label>
-          <input
-            id="filter-date-from"
-            type="date"
-            value={filter.dateFrom || ""}
-            onChange={handleDateFrom}
-            className={`${inputCls} input-date-icon`}
-          />
+          <div className="relative">
+            <input
+              id="filter-date-from"
+              type="date"
+              value={filter.dateFrom || ""}
+              onChange={handleDateFrom}
+              className={`${inputCls} input-date-icon pr-10`}
+            />
+            <button
+              type="button"
+              aria-label="Chọn ngày bắt đầu"
+              onClick={() => openDatePicker(document.getElementById("filter-date-from") as HTMLInputElement | null)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-brand-500 dark:hover:bg-gray-700"
+            >
+              <CalendarIcon />
+            </button>
+          </div>
         </div>
 
         {/* Đến ngày */}
         <div className="w-full md:w-44">
           <label className={labelCls}>Đến ngày</label>
-          <input
-            id="filter-date-to"
-            type="date"
-            value={filter.dateTo || ""}
-            onChange={handleDateTo}
-            className={`${inputCls} input-date-icon`}
-          />
+          <div className="relative">
+            <input
+              id="filter-date-to"
+              type="date"
+              value={filter.dateTo || ""}
+              onChange={handleDateTo}
+              className={`${inputCls} input-date-icon pr-10`}
+            />
+            <button
+              type="button"
+              aria-label="Chọn ngày kết thúc"
+              onClick={() => openDatePicker(document.getElementById("filter-date-to") as HTMLInputElement | null)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-brand-500 dark:hover:bg-gray-700"
+            >
+              <CalendarIcon />
+            </button>
+          </div>
         </div>
 
         {/* Clear button */}
