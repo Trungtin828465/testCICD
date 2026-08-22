@@ -178,8 +178,8 @@ function ShipmentCard({
 }
 
 export default function ShipmentTable({ shipments, onRowClick }: ShipmentTableProps) {
-  const [sortKey, setSortKey] = useState<SortKey>("orderCode");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [sortKey, setSortKey] = useState<SortKey>("eta");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [page, setPage] = useState(1);
 
   const handleSort = (key: SortKey) => {
@@ -200,6 +200,18 @@ export default function ShipmentTable({ shipments, onRowClick }: ShipmentTablePr
         va = a.receivedDocs;
         vb = b.receivedDocs;
         const cmp = (va ?? 0) < (vb ?? 0) ? -1 : (va ?? 0) > (vb ?? 0) ? 1 : 0;
+        return sortDir === "asc" ? cmp : -cmp;
+      }
+      if (sortKey === "eta") {
+        const etaA = a.eta ? Date.parse(`${a.eta}T00:00:00`) : null;
+        const etaB = b.eta ? Date.parse(`${b.eta}T00:00:00`) : null;
+
+        // Đưa các đơn chưa có ETA xuống cuối danh sách ở cả hai chiều.
+        if (etaA === null && etaB === null) return 0;
+        if (etaA === null) return 1;
+        if (etaB === null) return -1;
+
+        const cmp = etaA < etaB ? -1 : etaA > etaB ? 1 : 0;
         return sortDir === "asc" ? cmp : -cmp;
       }
       va = a[sortKey as keyof Shipment] as string | undefined;
