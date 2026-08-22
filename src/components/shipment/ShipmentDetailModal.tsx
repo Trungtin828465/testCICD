@@ -103,12 +103,80 @@ const STAGE_DOC_GROUPS: Record<Exclude<ShipmentFlowStage["key"], "delivered">, s
   customs: ["QDTQ", "MV"],
 };
 
+type CarrierTrackingLink = {
+  name: string;
+  aliases: string[];
+  requiresManualCode: boolean;
+  buildUrl: (trackingCode: string) => string;
+};
+
+// Chỉ hiển thị link cho các hãng đã được cấu hình. Có thể bổ sung URL tại đây
+// khi có thêm danh sách tracking chính thức từ các hãng tàu.
+const CARRIER_TRACKING_LINKS: CarrierTrackingLink[] = [
+  {
+    name: "Hapag-Lloyd",
+    aliases: ["happ","hapag", "hapag-lloyd", "hapag lloyd"],
+    requiresManualCode: false,
+    buildUrl: (trackingCode) => `https://www.hapag-lloyd.com/en/online-business/track/track-by-container-solution.html?container=${trackingCode}`,
+  },
+  {
+    name: "Maersk",
+    aliases: ["maersk", "a.p. moller", "apm"],
+    requiresManualCode: false,
+    buildUrl: (trackingCode) => `https://www.maersk.com/tracking/${trackingCode}`,
+  },
+  {
+    name: "MSC",
+    aliases: ["msc", "mediterranean shipping"],
+    requiresManualCode: true,
+    buildUrl: () => "https://www.msc.com/en/track-a-shipment",
+  },
+  {
+    name: "CMA CGM",
+    aliases: ["cma", "cma cgm"],
+    requiresManualCode: true,
+    buildUrl: () => "https://www.cma-cgm.com/ebusiness/tracking/search",
+  },
+  {
+    name: "COSCO",
+    aliases: ["cosco", "cosco shipping"],
+    requiresManualCode: false,
+    buildUrl: (trackingCode) => `https://elines.coscoshipping.com/ebusiness/cargoTracking?trackingType=BOOKING&number=${trackingCode}`,
+  },
+  {
+    name: "HMM",
+    aliases: ["hmm", "hyundai merchant marine"],
+    requiresManualCode: true,
+    buildUrl: () => "https://www.hmm21.com/e-service/general/DashBoard.do",
+  },
+  {
+    name: "FESCO",
+    aliases: ["fesco"],
+    requiresManualCode: false,
+    buildUrl: (trackingCode) => `https://my.fesco.com/tracking?tab=${trackingCode}`,
+  },
+  {
+    name: "Yang Ming",
+    aliases: ["yang ming", "yangming", "yml"],
+    requiresManualCode: true,
+    buildUrl: () => "https://www.yangming.com/en/esolution/cargo_tracking",
+  },
+];
+
+function findCarrierTrackingLink(vessel?: string): CarrierTrackingLink | null {
+  const normalizedVessel = (vessel || "").toLowerCase().trim();
+  if (!normalizedVessel) return null;
+  return CARRIER_TRACKING_LINKS.find((carrier) =>
+    carrier.aliases.some((alias) => normalizedVessel.includes(alias))
+  ) || null;
+}
+
 function InfoRow({ label, value, mono = false }: { label: string; value?: string; mono?: boolean }) {
   if (!value) return null;
   return (
     <div className="flex flex-col gap-0.5 sm:flex-row sm:items-start">
       <span className="w-full sm:w-40 text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">{label}</span>
-      <span className={`text-sm font-medium text-gray-800 dark:text-white/90 ${mono ? "font-mono" : ""}`}>{value}</span>
+      <span className={`min-w-0 break-words text-sm font-medium text-gray-800 dark:text-white/90 ${mono ? "font-mono" : ""}`}>{value}</span>
     </div>
   );
 }
@@ -288,6 +356,12 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
     return a.name.localeCompare(b.name, "vi");
   });
   const missingDocs = documentsSorted.filter(d => d.status === "missing" || d.status === "pending");
+  const carrierTrackingLink = findCarrierTrackingLink(shipment.vessel);
+  // Tất cả hãng dùng chuỗi trước dấu phẩy trong cột BL NO.
+  const trackingCode = shipment.bill?.split(",")[0].trim() || "";
+  const carrierTrackingUrl = carrierTrackingLink && trackingCode
+    ? carrierTrackingLink.buildUrl(trackingCode)
+    : null;
 
   const handleSendEmail = async () => {
     const missingDocNames = missingDocs.map((doc) => doc.name).join(", ");
@@ -331,26 +405,26 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} className="max-w-3xl mx-4 my-4 max-h-[92vh] overflow-hidden flex flex-col">
+    <Modal isOpen={isOpen} onClose={onClose} className="mx-2 my-2 flex max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-3xl flex-col overflow-hidden sm:mx-4 sm:my-4 sm:max-h-[92vh] sm:w-full">
       {/* Header */}
-      <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white font-mono tracking-wide">
+      <div className="flex flex-col gap-3 border-b border-gray-100 px-4 pb-4 pt-5 dark:border-gray-800 sm:flex-row sm:items-start sm:justify-between sm:px-6 sm:pb-4 sm:pt-6">
+        <div className="min-w-0 flex flex-col gap-1 pr-10 sm:pr-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
+            <h2 className="min-w-0 break-all text-base font-bold tracking-wide text-gray-900 dark:text-white sm:text-lg font-mono">
               {shipment.orderCode}
             </h2>
-            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${flowColor}`}>
+            <span className={`inline-flex max-w-full items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${flowColor}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${statusInfo?.dot || "bg-current"}`} />
-              {flowLabel}
+              <span className="truncate">{flowLabel}</span>
             </span>
           </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400">{shipment.shipName}</p>
-          <p className="text-xs text-gray-400">Nhà cung cấp: <span className="font-medium text-gray-600 dark:text-gray-300">{shipment.supplier}</span></p>
+          <p className="break-words text-sm text-gray-500 dark:text-gray-400">{shipment.shipName}</p>
+          <p className="break-words text-xs text-gray-400">Nhà cung cấp: <span className="font-medium text-gray-600 dark:text-gray-300">{shipment.supplier}</span></p>
         </div>
 
         {/* Missing docs badge */}
         {missingDocsCount > 0 && (
-          <div className="flex-shrink-0 flex items-center gap-1.5 rounded-xl bg-error-50 border border-error-100 px-3 py-1.5 dark:bg-error-500/10 dark:border-error-500/20">
+          <div className="flex w-fit max-w-full flex-shrink-0 items-center gap-1.5 rounded-xl border border-error-100 bg-error-50 px-3 py-1.5 dark:border-error-500/20 dark:bg-error-500/10">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-error-500">
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
               <line x1="12" y1="9" x2="12" y2="13"/>
@@ -364,12 +438,12 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 px-6 py-2 border-b border-gray-100 dark:border-gray-800 overflow-x-auto no-scrollbar flex-shrink-0">
+      <div className="flex flex-shrink-0 flex-wrap items-center gap-1 border-b border-gray-100 px-3 py-2 no-scrollbar dark:border-gray-800 sm:flex-nowrap sm:overflow-x-auto sm:px-6">
         {TAB_LIST.map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
+            className={`inline-flex min-w-0 basis-[calc(50%-0.25rem)] flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-2 text-xs font-medium transition-all duration-150 sm:basis-auto sm:flex-shrink-0 sm:flex-none sm:justify-start sm:px-3 sm:py-1.5 ${
               activeTab === tab.key
                 ? "bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400"
                 : "text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-200"
@@ -382,11 +456,11 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
       </div>
 
       {/* Tab Content */}
-      <div className="overflow-y-auto flex-1 px-6 py-5 custom-scrollbar">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 custom-scrollbar sm:px-6 sm:py-5">
 
         {/* ── OVERVIEW ── */}
         {activeTab === "overview" && (
-          <div className="flex max-h-[calc(92vh-180px)] flex-col gap-6 overflow-y-auto pr-1 custom-scrollbar">
+          <div className="flex min-w-0 flex-col gap-4 pr-0 sm:gap-6 sm:pr-1">
             {/* Key info grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-white/[0.02]">
@@ -469,13 +543,62 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
         {/* ── JOURNEY ── */}
         {activeTab === "journey" && (
           <div className="flex flex-col gap-6">
-            <div className="rounded-xl border border-gray-100 bg-gray-50 p-5 dark:border-gray-800 dark:bg-white/[0.02]">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-5">
-                Hành trình vận chuyển
-              </p>
-              <p className="text-sm text-gray-400">
-                Thanh trạng thái tổng quan đang hiển thị ở tab Tổng quan theo chứng từ hiện có.
-              </p>
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-white/[0.02] sm:p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    Tra cứu lịch trình
+                  </p>
+                  <p className="mt-2 text-sm font-medium text-gray-800 dark:text-white/90">
+                    {shipment.vessel || "Chưa xác định hãng tàu"}
+                  </p>
+                    <p className="mt-1 break-words text-xs text-gray-500 dark:text-gray-400">
+                    Mở trang tra cứu chính thức của hãng để xem vị trí và lịch trình container.
+                  </p>
+                  {trackingCode && (
+                    <p className="mt-1 text-xs font-mono text-gray-400 dark:text-gray-500">
+                      Mã tra cứu: {trackingCode}
+                    </p>
+                  )}
+                </div>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 flex-shrink-0 text-brand-500">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="2" y1="12" x2="22" y2="12" />
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                </svg>
+              </div>
+
+              {carrierTrackingLink && carrierTrackingUrl ? (
+                <>
+                  {carrierTrackingLink.requiresManualCode && (
+                    <p className="mt-4 rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 text-xs text-warning-700 dark:border-warning-500/30 dark:bg-warning-500/10 dark:text-warning-300">
+                      Hãy copy mã tra cứu ở trên trước khi ấn vào link.
+                    </p>
+                  )}
+                  <a
+                    href={carrierTrackingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`${carrierTrackingLink.requiresManualCode ? "mt-2" : "mt-4"} flex min-w-0 items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-500 px-3 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-600 dark:border-brand-500/30 sm:px-4`}
+                  >
+                    <span className="min-w-0 break-words text-left leading-5">Tra cứu lịch trình {carrierTrackingLink.name}</span>
+                    <svg className="flex-shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                      <polyline points="15 3 21 3 21 9" />
+                      <line x1="10" y1="14" x2="21" y2="3" />
+                    </svg>
+                  </a>
+                </>
+              ) : (
+                <div className="mt-4 rounded-xl border border-dashed border-warning-200 bg-warning-50/70 px-4 py-3 dark:border-warning-500/30 dark:bg-warning-500/10">
+                  <p className="text-sm font-semibold text-warning-700 dark:text-warning-300">
+                    {carrierTrackingLink ? "Chưa có mã tra cứu để mở lịch trình" : "Hãng tàu chưa cung cấp lịch trình"}
+                  </p>
+                  <p className="mt-1 text-xs text-warning-600 dark:text-warning-400">
+                    {carrierTrackingLink ? "Vui lòng bổ sung mã BL/container trong dữ liệu shipment." : "Hiện chưa có link tra cứu cho hãng tàu này."}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Journey detail cards */}
@@ -484,7 +607,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
                 {shipment.timeline.map((stage, idx) => (
                   <div
                     key={stage.id}
-                    className={`flex gap-4 rounded-xl border p-4 transition-all ${
+                    className={`flex min-w-0 gap-3 rounded-xl border p-3 transition-all sm:gap-4 sm:p-4 ${
                       stage.isCompleted
                         ? "border-success-100 bg-success-50/50 dark:border-success-500/20 dark:bg-success-500/5"
                         : stage.isCurrent
@@ -497,13 +620,13 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
                     }`}>
                       {stage.isCompleted ? "✓" : idx + 1}
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className={`text-sm font-semibold ${
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className={`min-w-0 break-words text-sm font-semibold ${
                           stage.isCompleted ? "text-success-700 dark:text-success-400" : stage.isCurrent ? "text-brand-700 dark:text-brand-300" : "text-gray-500"
                         }`}>{stage.label}</p>
                         {stage.isCurrent && (
-                          <span className="text-xs font-medium text-brand-500 bg-brand-50 dark:bg-brand-500/10 px-2 py-0.5 rounded-full">Đang ở đây</span>
+                          <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-500 dark:bg-brand-500/10">Đang ở đây</span>
                         )}
                       </div>
                       {stage.portName && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">📍 {stage.portName}</p>}
@@ -526,7 +649,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
           <div className="flex flex-col gap-4">
             {/* Missing docs alert */}
             {missingDocs.length > 0 && (
-              <div className="rounded-xl border border-error-200 bg-error-50 p-4 dark:border-error-500/20 dark:bg-error-500/10">
+              <div className="rounded-xl border border-error-200 bg-error-50 p-3 dark:border-error-500/20 dark:bg-error-500/10 sm:p-4">
                 <div className="flex items-start gap-3">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-error-500 mt-0.5 flex-shrink-0">
                     <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
@@ -558,7 +681,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
               <button
                 onClick={handleSendEmail}
                 disabled={isSendingEmail || emailSent}
-                className={`w-full flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold transition-all duration-200 ${
+                className={`flex w-full flex-wrap items-center justify-center gap-2 rounded-xl border px-3 py-3 text-center text-sm font-semibold leading-5 transition-all duration-200 sm:px-4 ${
                   emailSent
                     ? "border-success-200 bg-success-50 text-success-600 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-400"
                     : "border-brand-200 bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-60 disabled:cursor-not-allowed"
@@ -599,7 +722,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
                 return (
                   <div
                     key={doc.id}
-                    className={`flex items-center gap-3 rounded-xl border p-3.5 transition-colors ${
+                    className={`flex flex-col items-stretch gap-3 rounded-xl border p-3 transition-colors sm:flex-row sm:items-center sm:p-3.5 ${
                       doc.status === "missing"
                         ? "border-error-100 bg-error-50/50 dark:border-error-500/20 dark:bg-error-500/5"
                         : doc.status === "pending"
@@ -627,7 +750,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
                       <p className="text-xs text-gray-400">{doc.type.toUpperCase()}</p>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                       <span className={`flex items-center gap-1 text-xs font-semibold ${docStatus?.color}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${docStatus?.dot}`} />
                         {docStatus?.label}
@@ -694,16 +817,16 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
         {/* ── FOLDER ── */}
         {activeTab === "folder" && (
           <div className="flex flex-col gap-4">
-            <div className="rounded-xl border border-gray-100 bg-gray-50 p-5 dark:border-gray-800 dark:bg-white/[0.02]">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-warning-100 dark:bg-warning-500/10">
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-white/[0.02] sm:p-5">
+              <div className="mb-4 flex items-start gap-3 sm:items-center sm:gap-4">
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-warning-100 dark:bg-warning-500/10 sm:h-12 sm:w-12">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-warning-600">
                     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                   </svg>
                 </div>
-                <div>
-                  <p className="text-sm font-bold text-gray-800 dark:text-white">Thư mục Google Drive</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Chứa toàn bộ chứng từ hải quan của {shipment.orderCode}</p>
+                <div className="min-w-0">
+                  <p className="break-words text-sm font-bold text-gray-800 dark:text-white">Thư mục Google Drive</p>
+                  <p className="mt-0.5 break-words text-xs text-gray-400">Chứa toàn bộ chứng từ hải quan của {shipment.orderCode}</p>
                 </div>
               </div>
 
@@ -712,7 +835,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
                   href={shipment.driveUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 w-full rounded-xl border border-brand-200 bg-brand-500 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-600 transition-colors"
+                className="flex w-full flex-wrap items-center justify-center gap-2 rounded-xl border border-brand-200 bg-brand-500 px-3 py-3 text-center text-sm font-semibold leading-5 text-white transition-colors hover:bg-brand-600 sm:px-4"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
@@ -722,13 +845,13 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
                   Mở thư mục Drive
                 </a>
               ) : (
-                <div className="rounded-xl border border-dashed border-gray-200 dark:border-gray-700 p-6 text-center">
+                <div className="rounded-xl border border-dashed border-gray-200 p-5 text-center dark:border-gray-700 sm:p-6">
                   <p className="text-sm text-gray-400">Chưa có thư mục Drive được liên kết</p>
                 </div>
               )}
 
               {shipment.timeUpdate && (
-                <p className="mt-3 text-xs text-gray-400 text-center">
+                <p className="mt-3 break-words text-center text-xs text-gray-400">
                   Cập nhật lần cuối: {new Date(shipment.timeUpdate).toLocaleString("vi-VN")}
                 </p>
               )}
@@ -739,7 +862,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
               <button
                 onClick={handleSendEmail}
                 disabled={isSendingEmail || emailSent}
-                className={`w-full flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-all ${
+                className={`flex w-full flex-wrap items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-center text-sm font-semibold leading-5 transition-all sm:px-4 ${
                   emailSent
                     ? "border-success-200 bg-success-50 text-success-600 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-400"
                     : "border-error-200 bg-error-50 text-error-600 hover:bg-error-100 dark:border-error-500/30 dark:bg-error-500/10 dark:text-error-400 disabled:opacity-60"
