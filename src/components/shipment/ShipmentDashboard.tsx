@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import type { Shipment, ShipmentFilter, ShipmentStatus } from "@/types/shipment";
+import type { Shipment, ShipmentFilter, ShipmentStatus, ShipmentFilterStatus } from "@/types/shipment";
 import { fetchShipments, triggerUpdateAll, computeMetrics } from "@/services/shipmentApi";
 import ShipmentMetrics from "./ShipmentMetrics";
 import DashboardInfoBar from "./DashboardInfoBar";
@@ -71,7 +71,11 @@ export default function ShipmentDashboard() {
   const handleFilterChange = (newFilter: ShipmentFilter) => {
     setFilter(newFilter);
     if (newFilter.status !== undefined) {
-      setActiveMetricFilter(newFilter.status as ShipmentStatus | "all");
+      const metricStatus: ShipmentStatus | "all" =
+        newFilter.status === "sold_at_sea"
+          ? "all"
+          : newFilter.status as ShipmentStatus | "all";
+      setActiveMetricFilter(metricStatus);
     }
   };
 
@@ -89,7 +93,12 @@ export default function ShipmentDashboard() {
   const filteredShipments = useMemo(() => {
     return shipments.filter(s => {
       // Status
-      const statusOk = !filter.status || filter.status === "all" || s.status === filter.status;
+      const statusOk = (() => {
+        const selectedStatus = filter.status as ShipmentFilterStatus | "all" | undefined;
+        if (!selectedStatus || selectedStatus === "all") return true;
+        if (selectedStatus === "sold_at_sea") return Boolean(s.soldAtSea);
+        return s.status === selectedStatus;
+      })();
 
       // Search: mã đơn + tên hàng
       const q = (filter.search || "").toLowerCase().trim();

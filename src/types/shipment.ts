@@ -8,6 +8,7 @@ export type ShipmentStatus =
   | "missing_docs"; // Thiếu chứng từ (status = 0 từ getSheetTotal)
 
 export type DocumentStatus = "ok" | "missing" | "pending" | "expired";
+export type ShipmentFilterStatus = ShipmentStatus | "sold_at_sea";
 
 export type JourneyStage =
   | "origin_port"       // Cảng xuất phát (A)
@@ -65,6 +66,7 @@ export interface Shipment {
   port?: string;               // Cảng
   contCount?: number;          // Số cont
   status: ShipmentStatus;
+  soldAtSea?: boolean;         // Có trong sheet đơn hàng đã bán (getSheetSell)
   docStatus: number;           // 0 = thiếu, 1 = đủ (từ getSheetTotal)
   traCong?: string;           // Cột TRA_CONG từ sheet summary
   flowStageKey?: "buying" | "shipping" | "arrived" | "declared" | "fifteenb" | "customs" | "delivered";
@@ -95,7 +97,7 @@ export interface ShipmentMetricsSummary {
 }
 
 export interface ShipmentFilter {
-  status?: ShipmentStatus | "all";
+  status?: ShipmentFilterStatus | "all";
   search?: string;            // lọc mã đơn hàng + tên hàng
   supplier?: string;          // lọc nhà cung cấp (KHÁCH HÀNG)
   port?: string;              // lọc cảng

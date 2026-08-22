@@ -16,6 +16,37 @@ function normalizeText(value: string): string {
   return value.toUpperCase().replace(/[^A-Z0-9_]/g, "");
 }
 
+function normalizeOrderCode(value: unknown): string {
+  return String(value ?? "").trim().toUpperCase().replace(/\s+/g, "");
+}
+
+function getSellOrderCode(row: unknown): string {
+  if (typeof row === "string" || typeof row === "number") return normalizeOrderCode(row);
+  if (!row || typeof row !== "object") return "";
+
+  const raw = row as Record<string, unknown>;
+  const candidateKeys = [
+    "Số HĐ", "Sá»‘ HÄ", "SO HD", "SỐ HĐ", "orderCode", "order_code",
+    "order", "maDonHang", "Mã đơn hàng", "MÃ ĐƠN HÀNG",
+  ];
+
+  for (const key of candidateKeys) {
+    const value = raw[key];
+    if (value != null && String(value).trim()) return normalizeOrderCode(value);
+  }
+
+  const matchedKey = Object.keys(raw).find((key) => {
+    const normalizedKey = key
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "");
+    return normalizedKey === "SOHD" || normalizedKey.includes("ORDERCODE") || normalizedKey.includes("MADONHANG");
+  });
+
+  return matchedKey ? normalizeOrderCode(raw[matchedKey]) : "";
+}
+
 function pickRowString(row: SheetSummaryRow, keys: string[]): string {
   for (const key of keys) {
     const value = row[key];
@@ -410,11 +441,41 @@ export async function fetchSheetSummaryRows(): Promise<{ rows: SheetSummaryRow[]
   return { rows, updatedAt: json?.updatedAt ?? new Date().toISOString() };
 }
 
+export async function fetchSheetSellOrderCodes(): Promise<Set<string>> {
+  try {
+    const res = await fetch(`${API_BASE}/api/getSheetSell`, { cache: "no-store" });
+    if (!res.ok) return new Set();
+
+    const json = await res.json().catch(() => null) as {
+      data?: unknown[];
+      rows?: unknown[];
+      orders?: unknown[];
+    } | null;
+    const rows = Array.isArray(json) ? json : json?.data || json?.rows || json?.orders || [];
+
+    return new Set(rows.map(getSellOrderCode).filter(Boolean));
+  } catch (error) {
+    console.warn("Không lấy được danh sách getSheetSell", error);
+    return new Set();
+  }
+}
+
 export async function fetchShipments() {
-  const summaryResult = await fetchSheetSummaryRows();
-  const totalMap = await fetchSheetTotalMap();
+  const [summaryResult, totalMap, sellOrderCodes] = await Promise.all([
+    fetchSheetSummaryRows(),
+    fetchSheetTotalMap(),
+    fetchSheetSellOrderCodes(),
+  ]);
   const { rows, updatedAt } = summaryResult;
-  const shipments = rows.map((row, idx) => mapToShipment(row, totalMap, idx)).filter((s) => s.orderCode !== "");
+  const shipments = rows
+    .map((row, idx) => {
+      const shipment = mapToShipment(row, totalMap, idx);
+      return {
+        ...shipment,
+        soldAtSea: sellOrderCodes.has(normalizeOrderCode(shipment.orderCode)),
+      };
+    })
+    .filter((s) => s.orderCode !== "");
   return { shipments, lastUpdated: updatedAt, updatedBy: "Admin hệ thống" };
 }
 

@@ -451,13 +451,20 @@ export default function ShipmentTable({ shipments, onRowClick }: ShipmentTablePr
 
                     {/* Status */}
                     <td className="py-3.5 px-4">
-                      <span
-                        className={`inline-flex max-w-full items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${sc.color} ${sc.bg}`}
-                        title={shipment.flowStageLabel || sc.label}
-                      >
-                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${sc.dot}`} />
-                        <span className="truncate">{shipment.flowStageLabel || sc.label}</span>
-                      </span>
+                      <div className="flex flex-col items-start gap-1">
+                        <span
+                          className={`inline-flex max-w-full items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${sc.color} ${sc.bg}`}
+                          title={shipment.flowStageLabel || sc.label}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${sc.dot}`} />
+                          <span className="truncate">{shipment.flowStageLabel || sc.label}</span>
+                        </span>
+                        {shipment.soldAtSea && (
+                          <span className="text-[10px] font-semibold text-success-600 dark:text-success-400">
+                            Đã bán trên biển
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     {/* Docs */}

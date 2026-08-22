@@ -418,6 +418,11 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
               <span className="truncate">{flowLabel}</span>
             </span>
           </div>
+          {shipment.soldAtSea && (
+            <span className="text-xs font-semibold text-success-600 dark:text-success-400">
+              Đã bán trên biển
+            </span>
+          )}
           <p className="break-words text-sm text-gray-500 dark:text-gray-400">{shipment.shipName}</p>
           <p className="break-words text-xs text-gray-400">Nhà cung cấp: <span className="font-medium text-gray-600 dark:text-gray-300">{shipment.supplier}</span></p>
         </div>
@@ -460,7 +465,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
 
         {/* ── OVERVIEW ── */}
         {activeTab === "overview" && (
-          <div className="flex min-w-0 flex-col gap-4 pr-0 sm:gap-6 sm:pr-1">
+          <div className="flex min-h-0 max-h-[calc(100dvh-13rem)] min-w-0 flex-col gap-4 overflow-y-auto pr-1 custom-scrollbar sm:max-h-[calc(92vh-180px)] sm:gap-6 sm:pr-1">
             {/* Key info grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-white/[0.02]">

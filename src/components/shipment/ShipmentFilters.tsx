@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import type { ShipmentFilter, ShipmentStatus } from "@/types/shipment";
+import type { ShipmentFilter, ShipmentFilterStatus } from "@/types/shipment";
 
 interface ShipmentFiltersProps {
   filter: ShipmentFilter;
@@ -10,11 +10,12 @@ interface ShipmentFiltersProps {
   vessels?: string[];
 }
 
-const STATUS_OPTIONS: { value: ShipmentStatus | "all"; label: string }[] = [
+const STATUS_OPTIONS: { value: ShipmentFilterStatus | "all"; label: string }[] = [
   { value: "all", label: "Tất cả trạng thái" },
   { value: "shipping", label: "Đang vận chuyển" },
   { value: "completed", label: "Hoàn thành" },
   { value: "missing_docs", label: "Thiếu giấy tờ" },
+  { value: "sold_at_sea", label: "Đã bán trên biển" },
 ];
 
 const inputCls =
@@ -44,7 +45,7 @@ export default function ShipmentFilters({
   };
 
   const handleStatus = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    onChange({ ...filter, status: e.target.value as ShipmentStatus | "all" });
+    onChange({ ...filter, status: e.target.value as ShipmentFilterStatus | "all" });
   };
 
   const handleSupplier = (e: React.ChangeEvent<HTMLSelectElement>) => {
