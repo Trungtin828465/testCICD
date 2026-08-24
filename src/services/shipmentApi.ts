@@ -356,7 +356,9 @@ function mapToShipment(row: SheetSummaryRow, totalMap: Map<string, SheetTotalRow
   const documents = docInfo ? buildDocuments(totalDocs, receivedDocs, missingDocs, row) : [];
   const flowStage = deriveFlowStage(documents, eta);
   const hasCompletedDocs = totalDocs > 0 && receivedDocs >= totalDocs;
-  const isDelivered = Boolean(traCong) || (docInfo?.status === 1 && hasCompletedDocs);
+  // Chỉ xác định đã giao khi bộ chứng từ trong thư mục có TRA_CONG.
+  // Không dùng cột TRA_CONG từ getSheetSummary để quyết định trạng thái.
+  const isDelivered = flowStage.key === "delivered";
   const isCompleted = hasCompletedDocs || isDelivered;
   const finalFlowStageKey: FlowStageKey = isDelivered ? "delivered" : flowStage.key;
   const finalFlowStageLabel = isDelivered ? "Giao hàng thành công" : flowStage.label;
