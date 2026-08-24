@@ -161,6 +161,43 @@ const CARRIER_TRACKING_LINKS: CarrierTrackingLink[] = [
     requiresManualCode: true,
     buildUrl: () => "https://www.yangming.com/en/esolution/cargo_tracking",
   },
+  {
+    name: "CKLINE",
+    aliases: ["ckline", "ckl"],
+    requiresManualCode: true,
+    buildUrl: () => "https://es.ckline.co.kr/",
+  },
+  {
+  name: "EVERGREEN",
+  aliases: ["evergreen", "ever", "EVER"],
+  requiresManualCode: true,
+  buildUrl: () => "https://ct.shipmentlink.com/servlet/TDB1_CargoTracking.do",
+  },
+  {
+    name: "ONE",
+    aliases: ["one",
+      "ONE", "one cargo"],
+    requiresManualCode: false,
+    buildUrl: (trackingCode) => `https://ecomm.one-line.com/one-ecom/manage-shipment/cargo-tracking?trakNoParam=${trackingCode}&trakNoTpCdParam=B`,
+  },
+  {
+    name: "OOCL",
+    aliases: ["oocl", "oocl shipping"],
+    requiresManualCode: true,
+    buildUrl: () => "https://www.oocl.com/eng/ourservices/eservices/cargotracking/pages/cargotracking.aspx",
+  },
+  {
+    name: "PIL",
+    aliases: ["pil", "pacific international lines"],
+    requiresManualCode: false,
+    buildUrl: (trackingCode) => `https://www.pilship.com/digital-solutions/?tab=customer&id=track-trace&label=containerTandT&module=TrackTraceBL&refNo=${trackingCode}`,
+  },
+  {
+    name: "SINOKOR",
+    aliases: ["sinokor", "sinokor shipping"],
+    requiresManualCode: false,
+    buildUrl: (trackingCode) => `https://ebiz.sinokor.co.kr/BLDetail?blno=${trackingCode}`,
+  }
 ];
 
 function findCarrierTrackingLink(vessel?: string): CarrierTrackingLink | null {
