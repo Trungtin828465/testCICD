@@ -8,7 +8,7 @@ function parseDate(val: unknown): string | undefined {
   return isNaN(d.getTime()) ? undefined : d.toISOString().split("T")[0];
 }
 
-const DOCS = ["PI", "INV", "PKL", "BL", "CO", "HC", "DON_KD", "AN", "BB_LM", "PHI_TK", "THUE_NK", "15B", "QDTQ", "MV", "TRA_CONG"] as const;
+const DOCS = ["PI", "INV", "PKL", "BL", "CO", "HC", "DON_KD", "BB_LM", "PHI_TK", "THUE_NK", "TK", "15B", "QDTQ", "MV", "TRA_CONG"] as const;
 
 type FlowStageKey = "buying" | "shipping" | "arrived" | "declared" | "fifteenb" | "customs" | "delivered";
 
@@ -223,15 +223,14 @@ function deriveFlowStage(
    * Đã đến cảng
    *
    * Điều kiện hoàn thành:
-   * DON_KD + AN
+   * DON_KD
    *
-   * Nếu thiếu DON_KD hoặc AN thì vẫn dừng ở đây.
+   * Nếu thiếu DON_KD thì vẫn dừng ở đây.
    * =========================================================
    */
 
   const stage3Required = [
-    "DON_KD",
-    "AN"
+    "DON_KD"
   ];
 
   const stage3Complete = stage3Required.every(has);
@@ -251,7 +250,7 @@ function deriveFlowStage(
    * Nộp tờ khai
    *
    * Điều kiện hoàn thành:
-   * BB_LM + PHI_TK + THUE_NK
+   * BB_LM + PHI_TK + THUE_NK + TK
    *
    * Nếu thiếu bất kỳ chứng từ nào thì vẫn dừng ở đây.
    * =========================================================
@@ -260,7 +259,8 @@ function deriveFlowStage(
   const stage4Required = [
     "BB_LM",
     "PHI_TK",
-    "THUE_NK"
+    "THUE_NK",
+    "TK"
   ];
 
   const stage4Complete = stage4Required.every(has);
@@ -335,8 +335,8 @@ function deriveFlowStage(
 //   if (has("TRA_CONG")) return { key: "delivered", label: "Giao hàng thành công" };
 //   if (has("QDTQ") || has("MV")) return { key: "customs", label: "Thông quan", isLate: etaLate };
 //   if (has("15B")) return { key: "fifteenb", label: "Mẫu 15B", isLate: etaLate };
-//   if (has("BB_LM") || has("PHI_TK") || has("THUE_NK")) return { key: "declared", label: "Nộp tờ khai", isLate: etaLate };
-//   if (has("DON_KD") || has("AN")) return { key: "arrived", label: "Đã đến cảng", isLate: etaLate };
+//   if (has("BB_LM") || has("PHI_TK") || has("THUE_NK") || has("TK")) return { key: "declared", label: "Nộp tờ khai", isLate: etaLate };
+//   if (has("DON_KD")) return { key: "arrived", label: "Đã đến cảng", isLate: etaLate };
 //   if (has("INV") || has("PKL") || has("BL") || has("CO") || has("HC")|| has("BL")) {
 //     return { key: "shipping", label: "Đang vận chuyển biển", isLate: etaLate };
 //   }

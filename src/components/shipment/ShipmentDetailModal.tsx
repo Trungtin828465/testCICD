@@ -97,8 +97,8 @@ const FLOW_STAGES: ShipmentFlowStage[] = [
 const STAGE_DOC_GROUPS: Record<Exclude<ShipmentFlowStage["key"], "delivered">, string[]> = {
   buying: ["PI"],
   shipping: ["INV", "BL", "PKL", "CO", "HC"],
-  arrived: ["DON_KD", "AN"],
-  declared: ["BB_LM", "PHI_TK", "THUE_NK"],
+  arrived: ["DON_KD"],
+  declared: ["BB_LM", "PHI_TK", "THUE_NK", "TK"],
   fifteenb: ["15B"],
   customs: ["QDTQ", "MV"],
 };
@@ -283,8 +283,8 @@ function pickRecipient(shipment: Shipment) {
     ["INV", "BL", "CO", "HC", "PKL"],
     ["BL", "CO", "HC", "PKL", "INV"],
     ["QDTQ", "MV", "15B"],
-    ["DON_KD", "AN"],
-    ["BB_LM", "PHI_TK", "THUE_NK"],
+    ["DON_KD"],
+    ["BB_LM", "PHI_TK", "THUE_NK", "TK"],
     ["TRA_CONG", "QDTQ", "MV"],
   ];
 
@@ -303,7 +303,7 @@ function pickRecipient(shipment: Shipment) {
 
   for (const missing of missingDocs) {
     const missingKey = normalizeDocKey(missing.name);
-    const candidateKeys = relatedCandidates.find((group) => group.some((k) => missingKey.includes(k))) || ["INV", "BL", "CO", "HC", "PKL", "QDTQ", "MV", "15B", "DON_KD", "AN", "BB_LM", "PHI_TK", "THUE_NK"];
+    const candidateKeys = relatedCandidates.find((group) => group.some((k) => missingKey.includes(k))) || ["INV", "BL", "CO", "HC", "PKL", "QDTQ", "MV", "15B", "DON_KD", "BB_LM", "PHI_TK", "THUE_NK", "TK"];
     const recipient = pickFromDocs(okDocs, candidateKeys);
     if (recipient?.email) return recipient;
   }
@@ -565,7 +565,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
 
         {/* ── JOURNEY ── */}
         {activeTab === "journey" && (
-          <div className="flex flex-col gap-6">
+          <div className="flex min-h-0 max-h-[calc(100dvh-13rem)] flex-col gap-6 overflow-y-auto pr-1 custom-scrollbar sm:max-h-[calc(92vh-180px)]">
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-white/[0.02] sm:p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -669,7 +669,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
 
         {/* ── DOCUMENTS ── */}
         {activeTab === "documents" && (
-          <div className="flex flex-col gap-4">
+          <div className="flex min-h-0 max-h-[calc(100dvh-13rem)] flex-col gap-4 overflow-y-auto pr-1 custom-scrollbar sm:max-h-[calc(92vh-180px)]">
             {/* Missing docs alert */}
             {missingDocs.length > 0 && (
               <div className="rounded-xl border border-error-200 bg-error-50 p-3 dark:border-error-500/20 dark:bg-error-500/10 sm:p-4">
@@ -814,7 +814,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
 
         {/* ── HISTORY ── */}
         {activeTab === "history" && (
-          <div className="flex flex-col gap-1">
+          <div className="flex min-h-0 max-h-[calc(100dvh-13rem)] flex-col gap-1 overflow-y-auto pr-1 custom-scrollbar sm:max-h-[calc(92vh-180px)]">
             {(shipment.statusHistory || []).length === 0 ? (
               <p className="py-8 text-center text-sm text-gray-400">Chưa có lịch sử cập nhật</p>
             ) : (
@@ -848,7 +848,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
 
         {/* ── FOLDER ── */}
         {activeTab === "folder" && (
-          <div className="flex flex-col gap-4">
+          <div className="flex min-h-0 max-h-[calc(100dvh-13rem)] flex-col gap-4 overflow-y-auto pr-1 custom-scrollbar sm:max-h-[calc(92vh-180px)]">
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-white/[0.02] sm:p-5">
               <div className="mb-4 flex items-start gap-3 sm:items-center sm:gap-4">
                 <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-warning-100 dark:bg-warning-500/10 sm:h-12 sm:w-12">
