@@ -5,6 +5,7 @@ import type { Shipment } from "@/types/shipment";
 interface ShipmentTableProps {
   shipments: Shipment[];
   onRowClick: (shipment: Shipment) => void;
+  onReload: () => Promise<void>;
 }
 
 const PAGE_SIZE = 10;
@@ -177,10 +178,20 @@ function ShipmentCard({
   );
 }
 
-export default function ShipmentTable({ shipments, onRowClick }: ShipmentTableProps) {
+export default function ShipmentTable({ shipments, onRowClick, onReload }: ShipmentTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>("eta");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [page, setPage] = useState(1);
+  const [isReloading, setIsReloading] = useState(false);
+
+  const handleReload = async () => {
+    setIsReloading(true);
+    try {
+      await onReload();
+    } finally {
+      setIsReloading(false);
+    }
+  };
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -260,7 +271,21 @@ export default function ShipmentTable({ shipments, onRowClick }: ShipmentTablePr
             {shipments.length > 0 && ` • Trang ${safePage}/${totalPages}`}
           </p>
         </div>
-        <div className="hidden shrink-0 items-center gap-2 sm:flex">
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={handleReload}
+            disabled={isReloading}
+            title="Tải lại dữ liệu shipment"
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400 dark:hover:border-brand-500/30 dark:hover:bg-brand-500/10 dark:hover:text-brand-400"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={isReloading ? "animate-spin" : ""}>
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+            <span className="hidden sm:inline">{isReloading ? "Đang tải..." : "Reload data"}</span>
+          </button>
           <span className="text-xs text-gray-400">Click vào hàng để xem chi tiết</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-300">
             <circle cx="12" cy="12" r="10"/>

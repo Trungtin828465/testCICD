@@ -863,7 +863,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
             </div>
 
             {/* Quick email from folder tab */}
-            {missingDocsCount > 0 && (
+            {/* {missingDocsCount > 0 && (
               <button
                 onClick={handleSendEmail}
                 disabled={isSendingEmail || emailSent}
@@ -879,7 +879,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
                 </svg>
                 {emailSent ? "Đã gửi!" : `Gửi email cảnh báo thiếu ${missingDocsCount} giấy tờ`}
               </button>
-            )}
+            )} */}
           </div>
         )}
       </div>
