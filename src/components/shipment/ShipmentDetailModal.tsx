@@ -1,5 +1,5 @@
 ﻿"use client";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import type { Shipment } from "@/types/shipment";
 import ShipmentStatusBar, { type ShipmentFlowStage } from "./ShipmentStatusBar";
@@ -323,6 +323,14 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
   const [activeTab, setActiveTab] = useState<ModalTab>("overview");
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [selectedMissingDocIds, setSelectedMissingDocIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (activeTab === "documents") {
+      setSelectedMissingDocIds([]);
+      setEmailSent(false);
+    }
+  }, [activeTab, shipment?.id]);
 
   if (!shipment) return null;
 
@@ -356,6 +364,8 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
     return a.name.localeCompare(b.name, "vi");
   });
   const missingDocs = documentsSorted.filter(d => d.status === "missing" || d.status === "pending");
+  const selectedMissingDocs = missingDocs.filter((doc) => selectedMissingDocIds.includes(doc.id));
+  const selectedMissingIds = selectedMissingDocIds;
   const carrierTrackingLink = findCarrierTrackingLink(shipment.vessel);
   // Tất cả hãng dùng chuỗi trước dấu phẩy trong cột BL NO.
   const trackingCode = shipment.bill?.split(",")[0].trim() || "";
@@ -364,7 +374,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
     : null;
 
   const handleSendEmail = async () => {
-    const missingDocNames = missingDocs.map((doc) => doc.name).join(", ");
+    const missingDocNames = selectedMissingDocs.map((doc) => doc.name).join(", ");
 
     if (!missingDocNames) return;
 
@@ -402,6 +412,14 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
     } finally {
       setIsSendingEmail(false);
     }
+  };
+
+  const toggleMissingDocument = (docId: string) => {
+    setSelectedMissingDocIds(
+      selectedMissingIds.includes(docId)
+        ? selectedMissingIds.filter((id) => id !== docId)
+        : [...selectedMissingIds, docId]
+    );
   };
 
   return (
@@ -663,19 +681,28 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
                   </svg>
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-error-700 dark:text-error-400">
-                      Thiếu {missingDocs.length} chứng từ hải quan
+                      Còn thiếu {missingDocs.length} chứng từ
                     </p>
-                    <p className="text-xs text-error-600 dark:text-error-300 mt-1">
-                      Các giấy tờ sau cần được bổ sung để tránh ảnh hưởng tiến độ thông quan:
+                    <p className="mt-2 text-[11px] text-error-600 dark:text-error-300">
+                      Bấm vào chứng từ để chọn gửi email:
                     </p>
-                    <ul className="mt-2 flex flex-col gap-1">
-                      {missingDocs.map(d => (
-                        <li key={d.id} className="flex items-center gap-2 text-xs text-error-600 dark:text-error-300">
-                          <span className="w-1 h-1 rounded-full bg-error-500 flex-shrink-0" />
-                          {d.name}
-                        </li>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {missingDocs.map((doc) => (
+                        <button
+                          key={doc.id}
+                          type="button"
+                          onClick={() => toggleMissingDocument(doc.id)}
+                          aria-pressed={selectedMissingIds.includes(doc.id)}
+                          className={`rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors ${
+                            selectedMissingIds.includes(doc.id)
+                              ? "border-success-200 bg-success-50 text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-300"
+                              : "border-error-100 bg-white/70 text-error-600 hover:border-error-200 dark:border-error-500/20 dark:bg-error-500/5 dark:text-error-300"
+                          }`}
+                        >
+                          {doc.name.replace(/^Chứng từ\s*/i, "")}
+                        </button>
                       ))}
-                    </ul>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -685,7 +712,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
             {missingDocs.length > 0 && (
               <button
                 onClick={handleSendEmail}
-                disabled={isSendingEmail || emailSent}
+                disabled={isSendingEmail || emailSent || selectedMissingDocs.length === 0}
                 className={`flex w-full flex-wrap items-center justify-center gap-2 rounded-xl border px-3 py-3 text-center text-sm font-semibold leading-5 transition-all duration-200 sm:px-4 ${
                   emailSent
                     ? "border-success-200 bg-success-50 text-success-600 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-400"
@@ -714,7 +741,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
                       <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
                       <polyline points="22,6 12,13 2,6"/>
                     </svg>
-                    Gửi email cảnh báo (thiếu {missingDocsCount} giấy tờ)
+                    Gửi email cảnh báo ({selectedMissingDocs.length} chứng từ)
                   </>
                 )}
               </button>
@@ -866,7 +893,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
             {/* {missingDocsCount > 0 && (
               <button
                 onClick={handleSendEmail}
-                disabled={isSendingEmail || emailSent}
+                disabled={isSendingEmail || emailSent || selectedMissingDocs.length === 0}
                 className={`flex w-full flex-wrap items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-center text-sm font-semibold leading-5 transition-all sm:px-4 ${
                   emailSent
                     ? "border-success-200 bg-success-50 text-success-600 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-400"
@@ -877,7 +904,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
                   <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
                   <polyline points="22,6 12,13 2,6"/>
                 </svg>
-                {emailSent ? "Đã gửi!" : `Gửi email cảnh báo thiếu ${missingDocsCount} giấy tờ`}
+                {emailSent ? "Đã gửi!" : `Gửi email cảnh báo (${selectedMissingDocs.length} chứng từ)`}
               </button>
             )} */}
           </div>
