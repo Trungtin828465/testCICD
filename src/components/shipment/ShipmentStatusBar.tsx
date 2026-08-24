@@ -37,7 +37,8 @@ export default function ShipmentStatusBar({ activeStage, stages, isLate, hasOutO
   const activeIndex = Math.max(0, stages.findIndex((s) => s.key === activeStage));
 
   const getTone = (index: number) => {
-    if (index <= activeIndex) return "success";
+    if (index < activeIndex) return "success";
+    if (index === activeIndex) return activeStage === "delivered" ? "success" : "primary";
     return "muted";
   };
 
@@ -73,7 +74,7 @@ export default function ShipmentStatusBar({ activeStage, stages, isLate, hasOutO
         <div className="relative z-10 grid grid-cols-7 gap-2">
           {stages.map((stage, index) => {
             const tone = getTone(index);
-            const completed = index <= activeIndex;
+            const completed = index < activeIndex || (index === activeIndex && activeStage === "delivered");
             return (
               <div key={stage.key} className="flex min-w-0 flex-col items-center text-center">
                 <div
@@ -87,7 +88,7 @@ export default function ShipmentStatusBar({ activeStage, stages, isLate, hasOutO
                     {stage.shortLabel}
                   </p>
                   <p className={`mt-0.5 text-[9px] leading-tight ${subCls[tone]}`}>
-                    {completed ? (stage.key === "delivered" ? "Thành công" : "Đã xong") : index === activeIndex ? "Đang ở đây" : "Chưa tới"}
+                    {completed ? (stage.key === "delivered" ? "Thành công" : "Đã xong") : index === activeIndex ? "Chưa có PI" : "Chưa tới"}
                   </p>
                 </div>
               </div>

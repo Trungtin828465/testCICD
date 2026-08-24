@@ -460,7 +460,7 @@ export default function ShipmentTable({ shipments, onRowClick }: ShipmentTablePr
                           <span className="truncate">{shipment.flowStageLabel || sc.label}</span>
                         </span>
                         {shipment.soldAtSea && (
-                          <span className="text-[10px] font-semibold text-success-600 dark:text-success-400">
+                          <span className="text-[10px] ml-3 font-semibold text-success-600 dark:text-success-400">
                             Đã bán trên biển
                           </span>
                         )}
