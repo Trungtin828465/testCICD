@@ -107,7 +107,13 @@ type CarrierTrackingLink = {
   name: string;
   aliases: string[];
   requiresManualCode: boolean;
+  usesBackendApi?: boolean;
   buildUrl: (trackingCode: string) => string;
+};
+
+type TrackingApiResponse = {
+  success?: boolean;
+  message?: string;
 };
 
 function buildBackendTrackingUrl(endpoint: string, trackingCode: string): string {
@@ -145,7 +151,8 @@ const CARRIER_TRACKING_LINKS: CarrierTrackingLink[] = [
     name: "CMA CGM",
     aliases: ["cma", "cma cgm"],
     requiresManualCode: false,
-    buildUrl: (trackingCode) => buildBackendTrackingUrl("/api/cma", trackingCode),
+    usesBackendApi: true,
+    buildUrl: (trackingCode) => buildBackendTrackingUrl("/api/tracking/cma", trackingCode),
   },
   {
     name: "COSCO",
@@ -169,19 +176,22 @@ const CARRIER_TRACKING_LINKS: CarrierTrackingLink[] = [
     name: "Yang Ming",
     aliases: ["yang ming", "yangming", "yml"],
     requiresManualCode: false,
-    buildUrl: (trackingCode) => buildBackendTrackingUrl("/api/yangming", trackingCode),
+    usesBackendApi: true,
+    buildUrl: (trackingCode) => buildBackendTrackingUrl("/api/tracking/yangming", trackingCode),
   },
   {
     name: "CKLINE",
     aliases: ["ckline", "ck line", "ckl"],
     requiresManualCode: false,
-    buildUrl: (trackingCode) => buildBackendTrackingUrl("/api/ckline", trackingCode),
+    usesBackendApi: true,
+    buildUrl: (trackingCode) => buildBackendTrackingUrl("/api/tracking/ckline", trackingCode),
   },
   {
     name: "EVERGREEN",
     aliases: ["evergreen", "evergreen marine", "ever", "emc", "shipmentlink"],
     requiresManualCode: false,
-    buildUrl: (trackingCode) => buildBackendTrackingUrl("/api/shipmentlink", trackingCode),
+    usesBackendApi: true,
+    buildUrl: (trackingCode) => buildBackendTrackingUrl("/api/tracking/shipmentlink", trackingCode),
   },
   {
     name: "ONE",
@@ -371,11 +381,19 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [selectedMissingDocIds, setSelectedMissingDocIds] = useState<string[]>([]);
+  const [isOpeningTracking, setIsOpeningTracking] = useState(false);
+  const [trackingFeedback, setTrackingFeedback] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
 
   useEffect(() => {
     if (activeTab === "documents") {
       setSelectedMissingDocIds([]);
       setEmailSent(false);
+    }
+    if (activeTab === "journey") {
+      setTrackingFeedback(null);
     }
   }, [activeTab, shipment?.id]);
 
@@ -419,6 +437,44 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
   const carrierTrackingUrl = carrierTrackingLink && trackingCode
     ? carrierTrackingLink.buildUrl(trackingCode)
     : null;
+
+  const handleOpenCarrierTracking = async () => {
+    if (!carrierTrackingLink?.usesBackendApi || !carrierTrackingUrl) return;
+
+    setIsOpeningTracking(true);
+    setTrackingFeedback(null);
+
+    try {
+      const response = await fetch(carrierTrackingUrl, {
+        method: "GET",
+        cache: "no-store",
+      });
+      const result = await response
+        .json()
+        .catch(() => ({})) as TrackingApiResponse;
+      const message = result.message?.trim();
+
+      if (!response.ok || result.success !== true) {
+        throw new Error(
+          message || `Không thể mở tracking ${carrierTrackingLink.name}.`,
+        );
+      }
+
+      setTrackingFeedback({
+        type: "success",
+        message: message || `Đã mở tracking ${carrierTrackingLink.name}.`,
+      });
+    } catch (error) {
+      setTrackingFeedback({
+        type: "error",
+        message: error instanceof Error
+          ? error.message
+          : `Không thể mở tracking ${carrierTrackingLink.name}.`,
+      });
+    } finally {
+      setIsOpeningTracking(false);
+    }
+  };
 
   const handleSendEmail = async () => {
     const missingDocNames = selectedMissingDocs.map((doc) => doc.name).join(", ");
@@ -645,19 +701,59 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
                       Hãy copy mã tra cứu ở trên trước khi ấn vào link.
                     </p>
                   )}
-                  <a
-                    href={carrierTrackingUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`${carrierTrackingLink.requiresManualCode ? "mt-2" : "mt-4"} flex min-w-0 items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-500 px-3 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-600 dark:border-brand-500/30 sm:px-4`}
-                  >
-                    <span className="min-w-0 break-words text-left leading-5">Tra cứu lịch trình {carrierTrackingLink.name}</span>
-                    <svg className="flex-shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                      <polyline points="15 3 21 3 21 9" />
-                      <line x1="10" y1="14" x2="21" y2="3" />
-                    </svg>
-                  </a>
+                  {carrierTrackingLink.usesBackendApi ? (
+                    <button
+                      type="button"
+                      onClick={handleOpenCarrierTracking}
+                      disabled={isOpeningTracking}
+                      className="mt-4 flex w-full min-w-0 items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-500 px-3 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:cursor-wait disabled:opacity-70 dark:border-brand-500/30 sm:px-4"
+                    >
+                      <span className="min-w-0 break-words text-left leading-5">
+                        {isOpeningTracking
+                          ? `Đang mở tracking ${carrierTrackingLink.name}...`
+                          : `Tra cứu lịch trình ${carrierTrackingLink.name}`}
+                      </span>
+                      {isOpeningTracking ? (
+                        <svg className="flex-shrink-0 animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="23 4 23 10 17 10" />
+                          <polyline points="1 20 1 14 7 14" />
+                          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                        </svg>
+                      ) : (
+                        <svg className="flex-shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                          <polyline points="15 3 21 3 21 9" />
+                          <line x1="10" y1="14" x2="21" y2="3" />
+                        </svg>
+                      )}
+                    </button>
+                  ) : (
+                    <a
+                      href={carrierTrackingUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`${carrierTrackingLink.requiresManualCode ? "mt-2" : "mt-4"} flex w-full min-w-0 items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-500 px-3 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-600 dark:border-brand-500/30 sm:px-4`}
+                    >
+                      <span className="min-w-0 break-words text-left leading-5">Tra cứu lịch trình {carrierTrackingLink.name}</span>
+                      <svg className="flex-shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                        <polyline points="15 3 21 3 21 9" />
+                        <line x1="10" y1="14" x2="21" y2="3" />
+                      </svg>
+                    </a>
+                  )}
+                  {carrierTrackingLink.usesBackendApi && trackingFeedback && (
+                    <p
+                      role={trackingFeedback.type === "error" ? "alert" : "status"}
+                      className={`mt-2 rounded-lg border px-3 py-2 text-xs ${
+                        trackingFeedback.type === "success"
+                          ? "border-success-200 bg-success-50 text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-300"
+                          : "border-error-200 bg-error-50 text-error-700 dark:border-error-500/30 dark:bg-error-500/10 dark:text-error-300"
+                      }`}
+                    >
+                      {trackingFeedback.message}
+                    </p>
+                  )}
                 </>
               ) : (
                 <div className="mt-4 rounded-xl border border-dashed border-warning-200 bg-warning-50/70 px-4 py-3 dark:border-warning-500/30 dark:bg-warning-500/10">
