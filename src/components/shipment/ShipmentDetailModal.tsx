@@ -110,6 +110,16 @@ type CarrierTrackingLink = {
   buildUrl: (trackingCode: string) => string;
 };
 
+function buildBackendTrackingUrl(endpoint: string, trackingCode: string): string {
+  const normalizedApiBase = API_BASE.replace(/\/+$/, "");
+  return `${normalizedApiBase}${endpoint}/${encodeURIComponent(trackingCode)}`;
+}
+
+function buildMscTrackingUrl(trackingCode: string): string {
+  const params = btoa(`trackingNumber=${trackingCode}&trackingMode=0`);
+  return `https://www.msc.com/en/track-a-shipment?params=${encodeURIComponent(params)}`;
+}
+
 // Chỉ hiển thị link cho các hãng đã được cấu hình. Có thể bổ sung URL tại đây
 // khi có thêm danh sách tracking chính thức từ các hãng tàu.
 const CARRIER_TRACKING_LINKS: CarrierTrackingLink[] = [
@@ -117,7 +127,7 @@ const CARRIER_TRACKING_LINKS: CarrierTrackingLink[] = [
     name: "Hapag-Lloyd",
     aliases: ["happ","hapag", "hapag-lloyd", "hapag lloyd"],
     requiresManualCode: false,
-    buildUrl: (trackingCode) => `https://www.hapag-lloyd.com/en/online-business/track/track-by-container-solution.html?container=${trackingCode}`,
+    buildUrl: (trackingCode) => `https://www.hapag-lloyd.com/en/online-business/track/track-by-booking-solution.html?blno=${trackingCode}`,
   },
   {
     name: "Maersk",
@@ -128,14 +138,14 @@ const CARRIER_TRACKING_LINKS: CarrierTrackingLink[] = [
   {
     name: "MSC",
     aliases: ["msc", "mediterranean shipping"],
-    requiresManualCode: true,
-    buildUrl: () => "https://www.msc.com/en/track-a-shipment",
+    requiresManualCode: false,
+    buildUrl: buildMscTrackingUrl,
   },
   {
     name: "CMA CGM",
     aliases: ["cma", "cma cgm"],
-    requiresManualCode: true,
-    buildUrl: () => "https://www.cma-cgm.com/ebusiness/tracking/search",
+    requiresManualCode: false,
+    buildUrl: (trackingCode) => buildBackendTrackingUrl("/api/cma", trackingCode),
   },
   {
     name: "COSCO",
@@ -146,8 +156,8 @@ const CARRIER_TRACKING_LINKS: CarrierTrackingLink[] = [
   {
     name: "HMM",
     aliases: ["hmm", "hyundai merchant marine"],
-    requiresManualCode: true,
-    buildUrl: () => "https://www.hmm21.com/e-service/general/DashBoard.do",
+    requiresManualCode: false,
+    buildUrl: (trackingCode) => `https://www.hmm21.com/e-service/search/index.do?query=${trackingCode}`,
   },
   {
     name: "FESCO",
@@ -158,20 +168,20 @@ const CARRIER_TRACKING_LINKS: CarrierTrackingLink[] = [
   {
     name: "Yang Ming",
     aliases: ["yang ming", "yangming", "yml"],
-    requiresManualCode: true,
-    buildUrl: () => "https://www.yangming.com/en/esolution/cargo_tracking",
+    requiresManualCode: false,
+    buildUrl: (trackingCode) => buildBackendTrackingUrl("/api/yangming", trackingCode),
   },
   {
     name: "CKLINE",
-    aliases: ["ckline", "ckl"],
-    requiresManualCode: true,
-    buildUrl: () => "https://es.ckline.co.kr/",
+    aliases: ["ckline", "ck line", "ckl"],
+    requiresManualCode: false,
+    buildUrl: (trackingCode) => buildBackendTrackingUrl("/api/ckline", trackingCode),
   },
   {
-  name: "EVERGREEN",
-  aliases: ["evergreen", "ever", "EVER"],
-  requiresManualCode: true,
-  buildUrl: () => "https://ct.shipmentlink.com/servlet/TDB1_CargoTracking.do",
+    name: "EVERGREEN",
+    aliases: ["evergreen", "evergreen marine", "ever", "emc", "shipmentlink"],
+    requiresManualCode: false,
+    buildUrl: (trackingCode) => buildBackendTrackingUrl("/api/shipmentlink", trackingCode),
   },
   {
     name: "ONE",
@@ -183,8 +193,8 @@ const CARRIER_TRACKING_LINKS: CarrierTrackingLink[] = [
   {
     name: "OOCL",
     aliases: ["oocl", "oocl shipping"],
-    requiresManualCode: true,
-    buildUrl: () => "https://www.oocl.com/eng/ourservices/eservices/cargotracking/pages/cargotracking.aspx",
+    requiresManualCode: false,
+    buildUrl: (trackingCode) => `https://www.oocl.com/Pages/ExpressLink.aspx?eltype=ct&businessType=bookingNumber&businessNumber=${trackingCode}&language=en`,
   },
   {
     name: "PIL",
