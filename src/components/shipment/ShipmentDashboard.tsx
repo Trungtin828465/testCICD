@@ -37,6 +37,9 @@ export default function ShipmentDashboard() {
     try {
       const result = await fetchShipments();
       setShipments(result.shipments);
+      setSelectedShipment((current) => current
+        ? result.shipments.find((item) => item.orderCode === current.orderCode) || current
+        : current);
       setLastUpdated(result.lastUpdated);
       setUpdatedBy(result.updatedBy || "");
     } catch (error) {
@@ -225,6 +228,7 @@ export default function ShipmentDashboard() {
       <ShipmentDetailModal
         shipment={selectedShipment}
         isOpen={isModalOpen}
+        onRefresh={loadData}
         onClose={() => { setIsModalOpen(false); setSelectedShipment(null); }}
       />
     </div>

@@ -1,4 +1,4 @@
-import type { Shipment, ShipmentMetricsSummary, DriveDataResponse, SheetTotalRow, SheetSummaryRow } from "@/types/shipment";
+import type { Shipment, ShipmentMetricsSummary, DriveDataResponse, SheetTotalRow, SheetSummaryRow, ArchivedDocumentsResponse } from "@/types/shipment";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000";
 
@@ -121,7 +121,8 @@ function buildDocuments(
   totalDocs: number,
   receivedDocs: number,
   missingDocsText: string,
-  row?: SheetSummaryRow
+  row?: SheetSummaryRow,
+  totalRow?: SheetTotalRow
 ): import("@/types/shipment").ShipmentDocument[] {
   const missingSet = new Set(
     missingDocsText
@@ -131,13 +132,17 @@ function buildDocuments(
   );
 
   return DOCS.map((key, idx) => {
-    const missing = missingSet.has(key) || idx >= receivedDocs || idx >= totalDocs;
+    const fileUrl = totalRow?.[key as keyof SheetTotalRow];
+    const hasUrl = typeof fileUrl === "string" && fileUrl.trim().length > 0;
+    const missing = totalRow ? !hasUrl : missingSet.has(key) || idx >= receivedDocs || idx >= totalDocs;
     const contact = row ? buildUploaderContact(row, key) : {};
     return {
       id: key,
       name: `Chứng từ ${key}`,
       type: "file",
       status: missing ? "missing" : "ok",
+      url: typeof fileUrl === "string" && fileUrl.trim() ? fileUrl.trim() : undefined,
+      fileId: typeof fileUrl === "string" && fileUrl.trim() ? fileUrl.trim() : undefined,
       note: missing ? "Thiếu theo getSheetTotal" : undefined,
       uploaderEmail: contact.email,
       uploaderName: contact.name,
@@ -346,14 +351,14 @@ function deriveFlowStage(
 function mapToShipment(row: SheetSummaryRow, totalMap: Map<string, SheetTotalRow>, index: number): Shipment {
   const orderCode = String(row["Số HĐ"] ?? "").trim();
   const docInfo = totalMap.get(orderCode);
-  const totalDocs = docInfo?.requist_docs ?? 0;
-  const receivedDocs = docInfo?.total_docs ?? 0;
+  const totalDocs = docInfo ? (docInfo.requist_docs ?? DOCS.length) : 0;
+  const receivedDocs = docInfo?.total_docs ?? (docInfo ? DOCS.filter((key) => Boolean(String(docInfo[key] ?? "").trim())).length : 0);
   const missingDocs = docInfo?.mis_docs ?? "";
   const traCong = pickRowString(row, ["TRA_CONG", "TRA CONG", "TRA-CONG", "TRA CÔNG", "Trả công"]);
   const telex = pickRowString(row, ["LỆNH GIAO HÀNG", "LENH GIAO HANG", "TELEX", "TELEX NO.", "TELEX NUMBER"]);
   const eta = parseDate(pickRowString(row, ["ETA", "Eta"]));
   const ata = parseDate(pickRowString(row, ["ATA", "Ata"]));
-  const documents = docInfo ? buildDocuments(totalDocs, receivedDocs, missingDocs, row) : [];
+  const documents = docInfo ? buildDocuments(totalDocs, receivedDocs, missingDocs, row, docInfo) : [];
   const flowStage = deriveFlowStage(documents, eta);
   const hasCompletedDocs = totalDocs > 0 && receivedDocs >= totalDocs;
   // Chỉ xác định đã giao khi bộ chứng từ trong thư mục có TRA_CONG.
@@ -417,7 +422,7 @@ export async function fetchSheetTotalMap(): Promise<Map<string, SheetTotalRow>> 
   const json = await res.json();
   const map = new Map<string, SheetTotalRow>();
   for (const row of (json.data ?? []) as SheetTotalRow[]) {
-    const key = String(row.foldername ?? "").trim();
+    const key = String(row.Order_code ?? row.order_code ?? row.foldername ?? "").trim();
     if (key) map.set(key, row);
   }
   return map;
@@ -485,6 +490,75 @@ export async function triggerUpdateAll(): Promise<DriveDataResponse> {
   const res = await fetch(`${API_BASE}/api/updateAll`, { method: "GET", cache: "no-store" });
   if (!res.ok) return { success: false, message: "updateAll lỗi", updatedAt: new Date().toISOString() };
   return await res.json();
+}
+
+type BackendResponse<T> = { success?: boolean; data?: T; message?: string; error?: string };
+
+const backendUrl = (path: string) => `${API_BASE}/api/${path.replace(/^\//, "")}`;
+
+async function callBackend<T>(path: string, init?: RequestInit): Promise<T> {
+  try {
+    const response = await fetch(backendUrl(path), { cache: "no-store", ...init });
+    const json = await response.json().catch(() => ({})) as BackendResponse<T> & T;
+    if (!response.ok || json.success === false) {
+      throw new Error(json.message || json.error || "Yêu cầu tới máy chủ thất bại");
+    }
+    return (json.data ?? json) as T;
+  } catch (error) {
+    if (error instanceof TypeError) throw new Error("Không thể kết nối đến máy chủ");
+    throw error;
+  }
+}
+
+export interface SheetNotification {
+  name?: string;
+  order_code?: string;
+  type?: string;
+  mss_docs?: string;
+  status?: string | number;
+  update_by?: string;
+  date?: string;
+}
+
+export async function getSheetNoti(): Promise<SheetNotification[]> {
+  const result = await callBackend<SheetNotification[] | { data?: SheetNotification[] }>("getSheetNoti");
+  return Array.isArray(result) ? result : result.data || [];
+}
+
+export function getArchivedDocuments(orderCode: string): Promise<ArchivedDocumentsResponse> {
+  return callBackend<ArchivedDocumentsResponse>(`getArchivedDocuments?orderCode=${encodeURIComponent(orderCode)}`);
+}
+
+export function moveCompletedOrder(orderCode: string): Promise<{ success: boolean; moved?: boolean; targetFolderUrl?: string }> {
+  return callBackend(`moveCompletedOrder?orderCode=${encodeURIComponent(orderCode)}`, { method: "POST" });
+}
+
+export function checkDocumentsAndSaveStatus(): Promise<DriveDataResponse> {
+  return callBackend("checkDocumentsAndSaveStatus", { method: "POST" });
+}
+
+export function updateNotifications(): Promise<DriveDataResponse> {
+  return callBackend("updateNotifications", { method: "POST" });
+}
+
+export function updateNotificationStatus(): Promise<DriveDataResponse> {
+  return callBackend("updateStatusNotification", { method: "PUT" });
+}
+
+export interface UploadDocumentPayload {
+  action: "uploadDocument";
+  orderCode: string;
+  documentCode: string;
+  fileName: string;
+  fileData: string;
+}
+
+export function uploadDocument(payload: UploadDocumentPayload): Promise<DriveDataResponse> {
+  return callBackend("uploadDocument", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }
 
 export function computeMetrics(shipments: Shipment[]): ShipmentMetricsSummary {

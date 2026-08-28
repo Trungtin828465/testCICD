@@ -4,6 +4,7 @@ import { Modal } from "@/components/ui/modal";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
+import { getSheetNoti, updateNotificationStatus, type SheetNotification } from "@/services/shipmentApi";
 
 type NotificationKind = "missing_docs" | "delivered";
 
@@ -70,8 +71,8 @@ function mapRows(rows: NotificationRow[]): NotificationItem[] {
       const orderCode = String(row.order_code || "").trim();
       const missingDocs = String(row.missing_docs || "").trim();
       const message = String(row.message || "").trim();
-      const createdAt = String(row.created_at || new Date().toISOString());
-      const updatedBy = String(row.updated_by || "").trim();
+      const createdAt = String(row.created_at || (row as NotificationRow & { date?: string }).date || new Date().toISOString());
+      const updatedBy = String(row.updated_by || (row as NotificationRow & { update_by?: string }).update_by || "").trim();
       const delivered = isDeliveredType(type);
       const missing = isMissingDocsType(type) || (!delivered && Boolean(missingDocs || message));
 
@@ -113,7 +114,6 @@ function formatTime(iso: string) {
 }
 
 export default function NotificationDropdown() {
-  const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000";
   const [isOpen, setIsOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -125,10 +125,8 @@ export default function NotificationDropdown() {
   const hasReceivedInitialPayloadRef = useRef(false);
   const markNotificationsAsRead = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/updateStatusNotification`, {
-        method: "PUT",
-        cache: "no-store",
-      });
+      await updateNotificationStatus();
+      const res = { ok: true, status: 200 };
 
       if (!res.ok) throw new Error(`updateStatusNotification lỗi: ${res.status}`);
 
@@ -142,7 +140,22 @@ export default function NotificationDropdown() {
   };
 
   useEffect(() => {
-    const eventSource = new EventSource(`${API_BASE}/api/notifications/stream`);
+    let cancelled = false;
+    void getSheetNoti().then((rows: SheetNotification[]) => {
+      if (cancelled) return;
+      const mapped = mapRows(rows as NotificationRow[]);
+      setNotifications(mapped);
+      setBadgeCount(mapped.filter(isUnread).length);
+      setLoading(false);
+      setError("");
+    }).catch((err) => {
+      if (cancelled) return;
+      setLoading(false);
+      setError(err instanceof Error ? err.message : "Không thể tải thông báo");
+    });
+    return () => { cancelled = true; };
+  }, []);
+  /*
 
     const handleNotification = (event: MessageEvent<string>) => {
       try {
@@ -190,6 +203,7 @@ export default function NotificationDropdown() {
       eventSource.close();
     };
   }, [API_BASE]);
+  */
 
   const latestThree = useMemo(() => notifications.slice(0, 3), [notifications]);
   const hasUnread = badgeCount > 0;

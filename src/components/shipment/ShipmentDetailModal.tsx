@@ -3,6 +3,9 @@ import React, { useEffect, useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import type { Shipment } from "@/types/shipment";
 import ShipmentStatusBar, { type ShipmentFlowStage } from "./ShipmentStatusBar";
+import { useAuth } from "@/context/AuthContext";
+import { checkDocumentsAndSaveStatus, getArchivedDocuments, moveCompletedOrder, uploadDocument } from "@/services/shipmentApi";
+import type { ArchivedDocumentsResponse } from "@/types/shipment";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000";
 
@@ -10,6 +13,7 @@ interface ShipmentDetailModalProps {
   shipment: Shipment | null;
   isOpen: boolean;
   onClose: () => void;
+  onRefresh?: () => Promise<void>;
 }
 
 type ModalTab = "overview" | "journey" | "documents" | "history" | "folder";
@@ -61,7 +65,7 @@ const TAB_LIST: { key: ModalTab; label: string; icon: React.ReactNode }[] = [
   // },
   {
     key: "folder",
-    label: "Thư mục",
+    label: "Lưu trữ",
     icon: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
@@ -376,11 +380,19 @@ function pickRecipient(shipment: Shipment) {
   return { email: "", name: "" };
 }
 
-export default function ShipmentDetailModal({ shipment, isOpen, onClose }: ShipmentDetailModalProps) {
+export default function ShipmentDetailModal({ shipment, isOpen, onClose, onRefresh }: ShipmentDetailModalProps) {
+  const { user } = useAuth();
+  const isAdmin = user?.role?.trim().toLowerCase() === "admin";
   const [activeTab, setActiveTab] = useState<ModalTab>("overview");
+  const [archived, setArchived] = useState<ArchivedDocumentsResponse | null>(null);
+  const [isArchiveLoading, setIsArchiveLoading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewName, setPreviewName] = useState("");
+  const [localUploads, setLocalUploads] = useState<Record<string, string>>({});
+  const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
+  const [selectedMissingDocIds, setSelectedMissingDocIds] = useState<string[]>([]);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
-  const [selectedMissingDocIds, setSelectedMissingDocIds] = useState<string[]>([]);
   const [isOpeningTracking, setIsOpeningTracking] = useState(false);
   const [trackingFeedback, setTrackingFeedback] = useState<{
     type: "success" | "error";
@@ -389,13 +401,20 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
 
   useEffect(() => {
     if (activeTab === "documents") {
-      setSelectedMissingDocIds([]);
-      setEmailSent(false);
+      setPreviewUrl(null);
     }
     if (activeTab === "journey") {
       setTrackingFeedback(null);
     }
   }, [activeTab, shipment?.id]);
+
+  useEffect(() => {
+    if (!isOpen || !shipment) return;
+    setArchived(null);
+    void getArchivedDocuments(shipment.orderCode)
+      .then((result) => setArchived(result.archived ? result : { success: true, archived: false }))
+      .catch(() => setArchived({ success: true, archived: false }));
+  }, [isOpen, shipment]);
 
   if (!shipment) return null;
 
@@ -476,53 +495,68 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
     }
   };
 
-  const handleSendEmail = async () => {
-    const missingDocNames = selectedMissingDocs.map((doc) => doc.name).join(", ");
-
-    if (!missingDocNames) return;
-
-    setIsSendingEmail(true);
-    try {
-      const piRecipient = await fetchPIRecipient(shipment.orderCode);
-      const recipient = piRecipient || pickRecipient(shipment);
-
-      if (!recipient.email) {
-        throw new Error("Không tìm được email người nhận");
-      }
-
-      const res = await fetch(`${API_BASE}/api/sendMissingDocumentEmail`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          to_email: recipient.email,
-          to_name: recipient.name,
-          order_code: shipment.orderCode,
-          missing_docs: missingDocNames,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error(`sendMissingDocumentEmail lỗi: ${res.status}`);
-      }
-
-      setEmailSent(true);
-      window.setTimeout(() => setEmailSent(false), 5000);
-    } catch (error) {
-      console.error("Không gửi được email cảnh báo:", error);
-      alert("Không gửi được email cảnh báo. Vui lòng thử lại.");
-    } finally {
-      setIsSendingEmail(false);
-    }
-  };
-
   const toggleMissingDocument = (docId: string) => {
     setSelectedMissingDocIds(
       selectedMissingIds.includes(docId)
         ? selectedMissingIds.filter((id) => id !== docId)
         : [...selectedMissingIds, docId]
     );
+  };
+
+  const handlePickUpload = (docId: string) => {
+    if (!isAdmin || archived?.archived) return;
+    setSelectedMissingDocIds([docId]);
+    window.setTimeout(() => document.getElementById("shipment-document-upload")?.click(), 0);
+  };
+
+  const handleUploadSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    const docId = selectedMissingDocIds[0];
+    if (!file || !docId || !isAdmin || archived?.archived || uploadingDocId) return;
+    event.target.value = "";
+
+    setUploadingDocId(docId);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Không đọc được file"));
+        reader.onerror = () => reject(new Error("Không đọc được file"));
+        reader.readAsDataURL(file);
+      });
+      const fileData = dataUrl.includes(",") ? dataUrl.split(",", 2)[1] : dataUrl;
+
+      await uploadDocument({
+        action: "uploadDocument",
+        orderCode: shipment.orderCode,
+        documentCode: docId,
+        fileName: file.name,
+        fileData,
+      });
+      await checkDocumentsAndSaveStatus();
+      setLocalUploads((current) => ({ ...current, [docId]: URL.createObjectURL(file) }));
+      await onRefresh?.();
+      alert(`Đã bổ sung chứng từ ${docId} thành công`);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Không thể upload chứng từ");
+    } finally {
+      setUploadingDocId(null);
+      setSelectedMissingDocIds([]);
+    }
+  };
+
+  const handleArchive = async () => {
+    if (!isAdmin || shipment.docStatus !== 1 || archived?.archived || isArchiveLoading) return;
+    setIsArchiveLoading(true);
+    try {
+      await moveCompletedOrder(shipment.orderCode);
+      const result = await getArchivedDocuments(shipment.orderCode);
+      setArchived(result);
+      setActiveTab("folder");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Không thể lưu trữ hồ sơ");
+    } finally {
+      setIsArchiveLoading(false);
+    }
   };
 
   return (
@@ -565,7 +599,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
 
       {/* Tabs */}
       <div className="flex flex-shrink-0 flex-wrap items-center gap-1 border-b border-gray-100 px-3 py-2 no-scrollbar dark:border-gray-800 sm:flex-nowrap sm:overflow-x-auto sm:px-6">
-        {TAB_LIST.map(tab => (
+        {TAB_LIST.filter((tab) => tab.key !== "folder" || archived?.archived).map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
@@ -579,7 +613,19 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
             {tab.label}
           </button>
         ))}
+        {isAdmin && shipment.docStatus === 1 && !archived?.archived && (
+          <button
+            type="button"
+            onClick={handleArchive}
+            disabled={isArchiveLoading}
+            className="inline-flex min-w-0 basis-[calc(50%-0.25rem)] flex-1 items-center justify-center gap-1.5 rounded-lg bg-success-500 px-2 py-2 text-xs font-semibold text-white hover:bg-success-600 disabled:cursor-not-allowed disabled:opacity-60 sm:basis-auto sm:flex-none sm:px-3 sm:py-1.5"
+          >
+            {isArchiveLoading ? "Đang lưu..." : "Lưu trữ"}
+          </button>
+        )}
       </div>
+
+      <input id="shipment-document-upload" type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx" onChange={handleUploadSelected} />
 
       {/* Tab Content */}
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 custom-scrollbar sm:px-6 sm:py-5">
@@ -827,17 +873,18 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
                       Còn thiếu {missingDocs.length} chứng từ
                     </p>
                     <p className="mt-2 text-[11px] text-error-600 dark:text-error-300">
-                      Bấm vào chứng từ để chọn gửi email:
+                      Bấm vào chứng từ để bổ sung file (Admin):
                     </p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {missingDocs.map((doc) => (
                         <button
                           key={doc.id}
                           type="button"
-                          onClick={() => toggleMissingDocument(doc.id)}
-                          aria-pressed={selectedMissingIds.includes(doc.id)}
+                          onClick={() => handlePickUpload(doc.id)}
+                          disabled={!isAdmin || Boolean(archived?.archived) || Boolean(uploadingDocId)}
+                          aria-label={`Bổ sung ${doc.name}`}
                           className={`rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors ${
-                            selectedMissingIds.includes(doc.id)
+                            localUploads[doc.id]
                               ? "border-success-200 bg-success-50 text-success-700 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-300"
                               : "border-error-100 bg-white/70 text-error-600 hover:border-error-200 dark:border-error-500/20 dark:bg-error-500/5 dark:text-error-300"
                           }`}
@@ -854,9 +901,9 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
             {/* Email alert button */}
             {missingDocs.length > 0 && (
               <button
-                onClick={handleSendEmail}
+                onClick={() => undefined}
                 disabled={isSendingEmail || emailSent || selectedMissingDocs.length === 0}
-                className={`flex w-full flex-wrap items-center justify-center gap-2 rounded-xl border px-3 py-3 text-center text-sm font-semibold leading-5 transition-all duration-200 sm:px-4 ${
+                className={`hidden flex w-full flex-wrap items-center justify-center gap-2 rounded-xl border px-3 py-3 text-center text-sm font-semibold leading-5 transition-all duration-200 sm:px-4 ${
                   emailSent
                     ? "border-success-200 bg-success-50 text-success-600 dark:border-success-500/30 dark:bg-success-500/10 dark:text-success-400"
                     : "border-brand-200 bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-60 disabled:cursor-not-allowed"
@@ -930,11 +977,10 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
                         <span className={`w-1.5 h-1.5 rounded-full ${docStatus?.dot}`} />
                         {docStatus?.label}
                       </span>
-                      {doc.fileId && (
-                        <a
-                          href={doc.url || "#"}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                      {(doc.url || localUploads[doc.id]) && (
+                        <button
+                          type="button"
+                          onClick={() => { setPreviewUrl(localUploads[doc.id] || doc.url || null); setPreviewName(doc.name); }}
                           className="flex items-center justify-center w-7 h-7 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
                         >
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
@@ -942,7 +988,12 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
                             <polyline points="15 3 21 3 21 9"/>
                             <line x1="10" y1="14" x2="21" y2="3"/>
                           </svg>
-                        </a>
+                        </button>
+                      )}
+                      {doc.status !== "ok" && !archived?.archived && (
+                        <button type="button" disabled={!isAdmin || Boolean(uploadingDocId)} onClick={() => handlePickUpload(doc.id)} className="rounded-lg border border-brand-200 bg-brand-50 px-2 py-1 text-[11px] font-semibold text-brand-600 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300">
+                          {uploadingDocId === doc.id ? "Đang upload..." : localUploads[doc.id] ? "Đã chọn file" : "Bổ sung file"}
+                        </button>
                       )}
                     </div>
                   </div>
@@ -1000,14 +1051,14 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
                   </svg>
                 </div>
                 <div className="min-w-0">
-                  <p className="break-words text-sm font-bold text-gray-800 dark:text-white">Thư mục Google Drive</p>
-                  <p className="mt-0.5 break-words text-xs text-gray-400">Chứa toàn bộ chứng từ hải quan của {shipment.orderCode}</p>
+                  <p className="break-words text-sm font-bold text-gray-800 dark:text-white">Hồ sơ lưu trữ</p>
+                  <p className="mt-0.5 break-words text-xs text-gray-400">Các chứng từ đã lưu trữ của {shipment.orderCode}</p>
                 </div>
               </div>
 
-              {shipment.driveUrl ? (
+              {archived?.folderUrl ? (
                 <a
-                  href={shipment.driveUrl}
+                  href={archived.folderUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                 className="flex w-full flex-wrap items-center justify-center gap-2 rounded-xl border border-brand-200 bg-brand-500 px-3 py-3 text-center text-sm font-semibold leading-5 text-white transition-colors hover:bg-brand-600 sm:px-4"
@@ -1017,11 +1068,21 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
                     <polyline points="15 3 21 3 21 9"/>
                     <line x1="10" y1="14" x2="21" y2="3"/>
                   </svg>
-                  Mở thư mục Drive
+                  Mở hồ sơ lưu trữ
                 </a>
               ) : (
                 <div className="rounded-xl border border-dashed border-gray-200 p-5 text-center dark:border-gray-700 sm:p-6">
                   <p className="text-sm text-gray-400">Chưa có thư mục Drive được liên kết</p>
+                </div>
+              )}
+
+              {archived?.files && archived.files.length > 0 && (
+                <div className="mt-4 flex flex-col gap-2">
+                  {archived.files.map((file) => (
+                    <button key={file.fileId} type="button" onClick={() => { setPreviewUrl(file.fileUrl); setPreviewName(file.fileName); }} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
+                      {file.fileName}
+                    </button>
+                  ))}
                 </div>
               )}
 
@@ -1035,7 +1096,7 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
             {/* Quick email from folder tab */}
             {/* {missingDocsCount > 0 && (
               <button
-                onClick={handleSendEmail}
+                onClick={() => undefined}
                 disabled={isSendingEmail || emailSent || selectedMissingDocs.length === 0}
                 className={`flex w-full flex-wrap items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-center text-sm font-semibold leading-5 transition-all sm:px-4 ${
                   emailSent
@@ -1053,6 +1114,17 @@ export default function ShipmentDetailModal({ shipment, isOpen, onClose }: Shipm
           </div>
         )}
       </div>
+      {previewUrl && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={() => setPreviewUrl(null)}>
+          <div className="flex h-[80vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white shadow-xl dark:bg-gray-900" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+              <p className="truncate text-sm font-semibold text-gray-800 dark:text-white">{previewName}</p>
+              <button type="button" onClick={() => setPreviewUrl(null)} className="text-xl text-gray-500 hover:text-gray-800 dark:hover:text-white">×</button>
+            </div>
+            <iframe title={previewName} src={previewUrl} className="min-h-0 flex-1" />
+          </div>
+        </div>
+      )}
     </Modal>
   );
 }

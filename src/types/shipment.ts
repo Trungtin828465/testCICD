@@ -30,6 +30,27 @@ export interface ShipmentDocument {
   uploaderName?: string;
 }
 
+export interface ArchivedDocumentFile {
+  fileId: string;
+  fileName: string;
+  fileUrl: string;
+  mimeType?: string;
+  createdTime?: string;
+  updatedTime?: string;
+}
+
+export interface ArchivedDocumentsResponse {
+  success: boolean;
+  archived: boolean;
+  orderCode?: string;
+  folderId?: string;
+  folderName?: string;
+  folderUrl?: string;
+  totalFiles?: number;
+  files?: ArchivedDocumentFile[];
+  message?: string;
+}
+
 export interface ShipmentTimeline {
   id: string;
   stage: JourneyStage;
@@ -129,13 +150,21 @@ export interface SystemUser {
 
 // Raw API types from backend
 export interface SheetTotalRow {
-  foldername: string | number;
-  "folder url": string;
-  requist_docs: number;
-  total_docs: number;
-  mis_docs: string;
-  status: number;
-  time_update: string;
+  foldername?: string | number;
+  "folder url"?: string;
+  Order_code?: string | number;
+  order_code?: string | number;
+  PI?: string;
+  PKL?: string;
+  INV?: string;
+  BL?: string;
+  CO?: string;
+  HC?: string;
+  requist_docs?: number;
+  total_docs?: number;
+  mis_docs?: string;
+  status?: number;
+  time_update?: string;
 }
 
 export interface SheetSummaryRow {
