@@ -561,6 +561,20 @@ export function uploadDocument(payload: UploadDocumentPayload): Promise<DriveDat
   });
 }
 
+export interface EditSummaryPayload {
+  action: "editSummary";
+  orderCode: string;
+  data: Record<string, string | number>;
+}
+
+export function editSummary(payload: EditSummaryPayload): Promise<DriveDataResponse> {
+  return callBackend("editSummary", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 export function computeMetrics(shipments: Shipment[]): ShipmentMetricsSummary {
   return {
     total: shipments.length,
